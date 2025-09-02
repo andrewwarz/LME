@@ -23,10 +23,39 @@
   until: epel_install is success
   ignore_errors: "{{ ansible_check_mode }}"
 
-- name: Enable PowerTools/CRB repository
+- name: Install dnf-plugins-core
+  dnf:
+    name: dnf-plugins-core
+    state: present
+  become: yes
+
+- name: Check available repositories
+  command: dnf repolist --all
+  register: available_repos
+  changed_when: false
+  become: yes
+
+- name: Enable CRB repository (Rocky/AlmaLinux)
   command: dnf config-manager --set-enabled crb
   become: yes
   changed_when: true
+  when: "'crb' in available_repos.stdout"
+  ignore_errors: true
+
+- name: Enable PowerTools repository (CentOS)
+  command: dnf config-manager --set-enabled powertools
+  become: yes
+  changed_when: true
+  when: "'powertools' in available_repos.stdout"
+  ignore_errors: true
+
+- name: Enable CodeReady Builder for RHEL (if registered)
+  command: subscription-manager repos --enable codeready-builder-for-rhel-9-x86_64-rpms
+  become: yes
+  changed_when: true
+  when: 
+    - "'codeready-builder' in available_repos.stdout"
+    - ansible_distribution == "RedHat"
   ignore_errors: true
 
 - name: Install Red Hat 9-specific packages
