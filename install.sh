@@ -178,7 +178,7 @@ install_ansible() {
     
     # Set noninteractive mode for apt-based installations
     export DEBIAN_FRONTEND=noninteractive
-    
+
     case $DISTRO in
         ubuntu|debian|linuxmint|pop)
             sudo ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
@@ -191,8 +191,20 @@ install_ansible() {
             sudo dnf install -y ansible
             ;;
         centos|rhel|rocky|almalinux)
-            sudo dnf install -y epel-release
-            # Try to install ansible via dnf first
+            # Install EPEL repository first
+            echo "Installing EPEL repository..."
+            if ! sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm; then
+                echo -e "${RED}✗ Failed to install EPEL repository${NC}"
+                exit 1
+            fi
+            echo -e "${GREEN}✓ EPEL repository installed${NC}"
+            
+            # For RHEL, you might also need to enable CodeReady Builder repository
+            if [[ "$DISTRO" == "rhel" ]]; then
+                sudo subscription-manager repos --enable codeready-builder-for-rhel-$(rpm -E %rhel)-$(arch)-rpms 2>/dev/null || true
+            fi
+            
+            # Now try to install ansible via dnf
             if sudo dnf install -y ansible; then
                 echo -e "${GREEN}✓ Ansible installed via dnf${NC}"
             else
