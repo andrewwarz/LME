@@ -157,8 +157,7 @@ download_packages() {
         "locales"
         "uidmap"
         "ansible"
-        "nix-bin"
-        "nix-setup-systemd"
+        "podman"
     )
 
     # Update package lists first
@@ -186,6 +185,24 @@ download_packages() {
 
     # Return to original directory
     cd "$SCRIPT_DIR"
+
+    # Download Nix packages for offline installation
+    echo -e "${YELLOW}Downloading Nix packages for offline installation...${NC}"
+    mkdir -p "$OUTPUT_DIR/packages/nix"
+
+    # Ensure Nix is available and set up
+    export PATH=$PATH:/nix/var/nix/profiles/default/bin
+
+    # Install podman to get all dependencies, then export
+    echo -e "${YELLOW}Installing podman via Nix to capture dependencies...${NC}"
+    sudo nix-env -iA nixpkgs.podman
+
+    # Export podman and all its dependencies
+    echo -e "${YELLOW}Exporting podman and dependencies...${NC}"
+    PODMAN_PATHS=$(sudo nix-store -qR $(which podman))
+    sudo nix-store --export $PODMAN_PATHS > "$OUTPUT_DIR/packages/nix/podman-closure.nar"
+
+    echo -e "${GREEN}✓ Nix packages exported to podman-closure.nar${NC}"
 
     # Generate offline installation script
     cat > "$OUTPUT_DIR/packages/install_packages_offline.sh" << 'EOF'
@@ -227,6 +244,28 @@ fi
 echo -e "${YELLOW}Setting up Nix daemon...${NC}"
 sudo systemctl enable nix-daemon 2>/dev/null || true
 sudo systemctl start nix-daemon 2>/dev/null || true
+
+# Wait for Nix daemon to be ready
+sleep 5
+
+# Import Nix packages from offline archive
+echo -e "${YELLOW}Importing Nix packages from offline archive...${NC}"
+if [ -f "$SCRIPT_DIR/nix/podman-closure.nar" ]; then
+    export PATH=$PATH:/nix/var/nix/profiles/default/bin
+    sudo nix-store --import < "$SCRIPT_DIR/nix/podman-closure.nar"
+    echo -e "${GREEN}✓ Podman imported from offline archive${NC}"
+
+    # Create podman symlink
+    echo -e "${YELLOW}Creating podman symlink...${NC}"
+    sudo ln -sf /nix/var/nix/profiles/default/bin/podman /usr/local/bin/podman 2>/dev/null || true
+
+    # Update PATH in profiles
+    echo 'export PATH=$PATH:/nix/var/nix/profiles/default/bin' | sudo tee -a /root/.profile >/dev/null
+    echo 'export PATH=$PATH:/nix/var/nix/profiles/default/bin' | sudo tee -a /root/.bashrc >/dev/null
+else
+    echo -e "${RED}✗ Nix packages not found in offline archive${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}✓ All packages installed successfully!${NC}"
 echo -e "${YELLOW}Next: Run ../load_containers.sh to load container images${NC}"
