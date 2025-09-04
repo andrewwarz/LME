@@ -9,7 +9,7 @@ ENV LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 
 RUN dnf update -y && dnf install -y \
-    glibc-langpack-en sudo openssh-clients git \
+    glibc-langpack-en sudo openssh-clients git vim \
     && dnf clean all \
     && while getent group $GROUP_ID > /dev/null 2>&1; do GROUP_ID=$((GROUP_ID + 1)); done \
     && while getent passwd $USER_ID > /dev/null 2>&1; do USER_ID=$((USER_ID + 1)); done \
@@ -37,9 +37,9 @@ RUN dnf install -y \
     && dnf clean all
 
 # Install EPEL repository
-RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
-    && /usr/bin/crb enable \
-    && dnf clean all
+# RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm \
+#     && /usr/bin/crb enable \
+#     && dnf clean all
 
 RUN cd /lib/systemd/system/sysinit.target.wants/ && \
     ls | grep -v systemd-tmpfiles-setup | xargs rm -f $1 && \

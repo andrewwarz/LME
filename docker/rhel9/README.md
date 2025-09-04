@@ -23,27 +23,35 @@ If you have a Red Hat Enterprise Linux subscription and want to use package mana
 1. **Register the container** with your RHEL subscription:
    ```bash
    docker exec -it lme subscription-manager register --username <your-username> --password <your-password>
+   # or
+   docker exec -it lme subscription-manager register --activationkey=YOUR_ACTIVATION_KEY  --org=YOUR_ORG_ID
    ```
 
-2. **Attach to a subscription**:
+2. **Attach to a subscription (if needed)**:
    ```bash
    docker exec -it lme subscription-manager attach --auto
    ```
 
-3. **Enable Ansible repositories**:
+3. **Enable Ansible repositories (should be installed by install.sh)**:
    ```bash
-   docker exec -it lme subscription-manager repos --enable ansible-2.9-for-rhel-9-x86_64-rpms
+   dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
    ```
 
-4. **Install Ansible via package manager**:
-   ```bash
-   docker exec -it lme dnf install -y ansible-core
-   ```
 
 **Note**: Without a RHEL subscription, the install script will automatically fall back to pip installation.
 
 ## Quick Start
 
+### Prerequisites Setup
+1. **Set the HOST_IP environment variable**:
+   ```bash
+   # Copy and edit the environment file
+   cp environment_example.sh environment.sh
+   # Edit environment.sh to set your HOST_IP
+   nano environment.sh
+   ```
+
+### Option 1: Manual Installation (Current Default)
 1. **Build and start the container**:
    ```bash
    docker compose up -d --build
@@ -51,14 +59,26 @@ If you have a Red Hat Enterprise Linux subscription and want to use package mana
 
 2. **Run the LME installation**:
    ```bash
-   docker exec -it lme bash -c "cd /root/LME && sudo ./install.sh"
+   docker exec -it lme bash -c "cd /root/LME && sudo ./install.sh -d"
    ```
 
-3. **Access the services**:
-   - Kibana: http://localhost:5601
-   - Elasticsearch: http://localhost:9200
-   - Fleet Server: http://localhost:8220
-   - HTTPS: https://localhost:443
+### Option 2: Monitor Setup Progress
+If you want to monitor the installation process:
+1. **Run the setup checker** (in a separate terminal):
+   ```bash
+   # For Linux/macOS
+   ./check-lme-setup.sh
+   
+   # For Windows PowerShell
+   .\check-lme-setup.ps1
+   ```
+
+### Access the Services
+Once installation is complete:
+- Kibana: http://localhost:5601
+- Elasticsearch: http://localhost:9200
+- Fleet Server: http://localhost:8220
+- HTTPS: https://localhost:443
 
 ## Container Features
 
@@ -89,6 +109,12 @@ If you have a Red Hat Enterprise Linux subscription and want to use package mana
 - `HOST_UID`: User ID for lme-user (default: 1001)
 - `HOST_GID`: Group ID for lme-user (default: 1001)
 
+### Container Environment Variables (Auto-configured)
+The following environment variables are automatically set by docker-compose:
+- `PODMAN_IGNORE_CGROUPSV1_WARNING`: Suppresses podman cgroup warnings
+- `LANG`, `LANGUAGE`, `LC_ALL`: Locale settings (en_US.UTF-8)
+- `container`: Set to "docker" for container detection
+
 ## Troubleshooting
 
 ### Common Issues
@@ -113,6 +139,12 @@ If you have a Red Hat Enterprise Linux subscription and want to use package mana
 - **Solution**: Ensure the container is running with proper privileges
 - **Check**: `docker inspect lme | grep -i privileged`
 
+#### Volume Mount Issues
+- **Problem**: "No such file or directory" when accessing /root/LME
+- **Solution**: Ensure you're running docker-compose from the correct directory
+- **Details**: The volume mount `../../../LME:/root/LME` expects the LME directory to be 3 levels up from your current location
+- **Fix**: Run docker-compose from the correct path or adjust the volume mount in docker-compose.yml
+
 ### Debugging Commands
 
 ```bash
@@ -133,7 +165,25 @@ docker exec -it lme ansible --version
 
 # Check available repositories
 docker exec -it lme dnf repolist
+
+# Monitor setup progress (if using automated setup)
+./check-lme-setup.sh  # Linux/macOS
+.\check-lme-setup.ps1  # Windows PowerShell
 ```
+
+### Setup Monitoring
+The directory includes setup monitoring scripts that can track installation progress:
+- `check-lme-setup.sh`: Linux/macOS script to monitor setup
+- `check-lme-setup.ps1`: Windows PowerShell script to monitor setup
+
+These scripts:
+- Monitor for 30 minutes by default
+- Check for successful completion messages
+- Report Ansible playbook failures
+- Track progress through multiple playbook executions
+- Exit with appropriate status codes for automation
+
+**Note**: These scripts expect an `lme-setup` systemd service to be running. Currently, the automated setup service is disabled in the RHEL9 container configuration, so these scripts are primarily useful for development or if you enable the automated setup service.
 
 ## Development
 
@@ -150,6 +200,14 @@ docker compose build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000
 - Modify `Dockerfile` to add additional packages
 - Update `docker-compose.yml` for different port mappings
 - Edit `environment.sh` to set custom environment variables
+
+### Differences from Other Docker Setups
+The RHEL9 container setup differs from other LME Docker configurations (22.04, 24.04, d12.10):
+- **Manual Installation**: Currently requires manual execution of install.sh
+- **No Automated Service**: The lme-setup.service is commented out in the Dockerfile
+- **UBI9 Base**: Uses Red Hat Universal Base Image instead of Ubuntu/Debian
+- **EPEL Dependencies**: Relies on EPEL repository for additional packages
+- **Ansible Installation**: Automatically falls back to pip installation due to missing ansible-core in EPEL
 
 ## Support
 
