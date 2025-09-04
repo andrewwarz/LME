@@ -85,7 +85,7 @@ install_prerequisites() {
     sudo apt-get upgrade -y
 
     # Install common packages
-    sudo apt-get install -y curl wget gnupg2 sudo git openssh-client expect
+    sudo apt-get install -y curl wget gnupg sudo git openssh-client expect
 
     # Install Debian/Ubuntu specific packages
     sudo apt-get install -y apt-transport-https ca-certificates gnupg lsb-release software-properties-common fuse-overlayfs build-essential python3-pip python3-pexpect locales uidmap
