@@ -157,7 +157,8 @@ download_packages() {
         "locales"
         "uidmap"
         "ansible"
-        "podman"
+        "nix-bin"
+        "nix-setup-systemd"
     )
 
     # Update package lists first
