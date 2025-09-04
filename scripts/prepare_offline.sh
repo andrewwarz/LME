@@ -19,7 +19,6 @@ usage() {
     echo "Usage: $0 [OPTIONS]"
     echo
     echo "This script prepares resources for offline LME installation by:"
-    echo "- Installing all prerequisites including Ansible"
     echo "- Downloading and saving container images"
     echo "- Creating a package list for manual download"
     echo "- Generating offline installation instructions"
@@ -62,91 +61,7 @@ check_internet() {
     fi
 }
 
-# Install all prerequisites needed for LME
-install_prerequisites() {
-    echo -e "${YELLOW}Installing all prerequisites...${NC}"
 
-    # Update system
-    sudo apt-get update
-    sudo apt-get upgrade -y
-
-    # Install common packages
-    sudo apt-get install -y curl wget gnupg sudo git openssh-client expect
-
-    # Install Debian/Ubuntu specific packages
-    sudo apt-get install -y apt-transport-https ca-certificates gnupg lsb-release software-properties-common fuse-overlayfs build-essential python3-pip python3-pexpect locales uidmap
-
-    # Install Ansible properly
-    echo -e "${YELLOW}Installing Ansible...${NC}"
-    sudo apt-get install -y software-properties-common
-    sudo add-apt-repository --yes --update ppa:ansible/ansible
-    sudo apt-get update
-    sudo apt-get install -y ansible
-
-    # Verify Ansible installation
-    if command -v ansible &> /dev/null; then
-        echo -e "${GREEN}✓ Ansible installed successfully: $(ansible --version | head -n1)${NC}"
-    else
-        echo -e "${RED}✗ Failed to install Ansible${NC}"
-        exit 1
-    fi
-
-    # Install Nix properly
-    echo -e "${YELLOW}Installing Nix...${NC}"
-    sudo apt-get install -y nix-bin nix-setup-systemd
-    sudo systemctl enable nix-daemon
-    sudo systemctl start nix-daemon
-    
-    # Add user to nix-users group
-    sudo usermod -a -G nix-users $USER
-    
-    # Wait a moment for the service to be ready
-    sleep 5
-
-    # Set up nix channels as root
-    echo -e "${YELLOW}Setting up Nix channels...${NC}"
-    sudo nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
-    sudo nix-channel --update
-
-    # Install Podman via Nix as root
-    echo -e "${YELLOW}Installing Podman via Nix...${NC}"
-    sudo nix-env -iA nixpkgs.podman
-
-    # Create symlink and add to PATH
-    sudo ln -sf /nix/var/nix/profiles/default/bin/podman /usr/local/bin/podman
-    export PATH=$PATH:/nix/var/nix/profiles/default/bin
-
-    # Set up containers directories and policy (matching playbook setup)
-    mkdir -p ~/.config/containers
-    sudo mkdir -p /etc/containers
-
-    # Create policy.json file (matching what the playbook does)
-    sudo tee /etc/containers/policy.json > /dev/null << 'EOF'
-{
-    "default": [
-        {
-            "type": "insecureAcceptAnything"
-        }
-    ]
-}
-EOF
-
-    # Set up storage.conf (matching playbook setup)
-    sudo tee /etc/containers/storage.conf > /dev/null << 'EOF'
-[storage]
-driver = "overlay"
-runroot = "/run/containers/storage"
-graphroot = "/var/lib/containers/storage"
-[storage.options.overlay]
-mount_program = "/usr/bin/fuse-overlayfs"
-EOF
-
-    # Set up subuid/subgid (matching playbook setup)
-    echo "containers:165536:65536" | sudo tee -a /etc/subuid
-    echo "containers:165536:65536" | sudo tee -a /etc/subgid
-
-    echo -e "${GREEN}✓ All prerequisites installed${NC}"
-}
 
 # Check if podman is available
 check_podman() {
@@ -214,73 +129,116 @@ download_containers() {
     done < "$CONTAINERS_FILE"
 }
 
-# Generate package lists
-generate_package_lists() {
-    echo -e "${YELLOW}Generating package lists...${NC}"
+# Download packages for offline installation
+download_packages() {
+    echo -e "${YELLOW}Downloading packages for offline installation...${NC}"
 
-    cat > "$OUTPUT_DIR/packages/common_packages.txt" << EOF
-# Common packages required for LME installation
-curl
-wget
-gnupg2
-sudo
-git
-openssh-client
-expect
-EOF
+    # Create package cache directory
+    mkdir -p "$OUTPUT_DIR/packages/debs"
 
-    cat > "$OUTPUT_DIR/packages/debian_ubuntu_packages.txt" << EOF
-# Debian/Ubuntu specific packages
-apt-transport-https
-ca-certificates
-gnupg
-lsb-release
-software-properties-common
-fuse-overlayfs
-build-essential
-python3-pip
-python3-pexpect
-locales
-nix-bin
-nix-setup-systemd
-uidmap
-ansible
-EOF
+    # Define package lists
+    PACKAGES=(
+        "curl"
+        "wget"
+        "gnupg2"
+        "sudo"
+        "git"
+        "openssh-client"
+        "expect"
+        "apt-transport-https"
+        "ca-certificates"
+        "gnupg"
+        "lsb-release"
+        "software-properties-common"
+        "fuse-overlayfs"
+        "build-essential"
+        "python3-pip"
+        "python3-pexpect"
+        "locales"
+        "uidmap"
+        "ansible"
+        "nix-bin"
+        "nix-setup-systemd"
+    )
 
-    # Generate a script to install packages offline
+    # Update package lists first
+    echo -e "${YELLOW}Updating package lists...${NC}"
+    sudo apt-get update
+
+    # Add Ansible PPA to get latest version
+    echo -e "${YELLOW}Adding Ansible PPA...${NC}"
+    sudo add-apt-repository --yes --update ppa:ansible/ansible
+    sudo apt-get update
+
+    # Download packages
+    echo -e "${YELLOW}Downloading packages...${NC}"
+    cd "$OUTPUT_DIR/packages/debs"
+    for package in "${PACKAGES[@]}"; do
+        echo -e "${YELLOW}  Downloading $package...${NC}"
+        apt-get download "$package" 2>/dev/null || echo -e "${RED}  ✗ Failed to download $package${NC}"
+    done
+
+    # Download dependencies recursively
+    echo -e "${YELLOW}Downloading package dependencies...${NC}"
+    for package in "${PACKAGES[@]}"; do
+        apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces --no-enhances "$package" | grep "^\w" | sort -u) 2>/dev/null || true
+    done
+
+    # Return to original directory
+    cd "$SCRIPT_DIR"
+
+    # Generate offline installation script
     cat > "$OUTPUT_DIR/packages/install_packages_offline.sh" << 'EOF'
 #!/bin/bash
 
 # Script to install packages offline on the target system
-# Run this before running LME installation
 
-echo "Installing required packages for LME offline installation..."
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
 
-# Common packages
-sudo apt-get update
-sudo apt-get install -y curl wget gnupg2 sudo git openssh-client expect
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+DEBS_DIR="$SCRIPT_DIR/debs"
 
-# Debian/Ubuntu specific packages
-sudo apt-get install -y apt-transport-https ca-certificates gnupg lsb-release software-properties-common fuse-overlayfs build-essential python3-pip python3-pexpect locales uidmap
+echo -e "${YELLOW}Installing required packages for LME offline installation...${NC}"
 
-# Install Ansible (this is the critical missing piece!)
-sudo apt-get install -y software-properties-common
-sudo add-apt-repository --yes --update ppa:ansible/ansible
-sudo apt-get update
-sudo apt-get install -y ansible
+if [ ! -d "$DEBS_DIR" ]; then
+    echo -e "${RED}✗ Debs directory not found: $DEBS_DIR${NC}"
+    exit 1
+fi
 
-# Install Nix
-sudo apt-get install -y nix-bin nix-setup-systemd
-sudo systemctl enable nix-daemon
-sudo systemctl start nix-daemon
+# Install packages from local cache
+echo -e "${YELLOW}Installing packages from local .deb files...${NC}"
+cd "$DEBS_DIR"
 
-echo "Package installation complete!"
-echo "Next: Run ./load_containers.sh to load container images"
+# Install all .deb files
+if ls *.deb 1> /dev/null 2>&1; then
+    echo -e "${YELLOW}Installing .deb packages...${NC}"
+    sudo dpkg -i *.deb 2>/dev/null || true
+
+    # Fix any dependency issues
+    echo -e "${YELLOW}Fixing any dependency issues...${NC}"
+    sudo apt-get install -f -y 2>/dev/null || true
+
+    echo -e "${GREEN}✓ Package installation complete!${NC}"
+else
+    echo -e "${RED}✗ No .deb files found in debs directory${NC}"
+    exit 1
+fi
+
+# Set up Nix daemon
+echo -e "${YELLOW}Setting up Nix daemon...${NC}"
+sudo systemctl enable nix-daemon 2>/dev/null || true
+sudo systemctl start nix-daemon 2>/dev/null || true
+
+echo -e "${GREEN}✓ All packages installed successfully!${NC}"
+echo -e "${YELLOW}Next: Run ../load_containers.sh to load container images${NC}"
 EOF
 
     chmod +x "$OUTPUT_DIR/packages/install_packages_offline.sh"
 
-    echo -e "${GREEN}✓ Package lists and installation script created in $OUTPUT_DIR/packages/${NC}"
+    echo -e "${GREEN}✓ Packages downloaded to $OUTPUT_DIR/packages/debs/${NC}"
 }
 
 
@@ -444,20 +402,16 @@ main() {
     echo
 
     check_internet
-    install_prerequisites
     check_podman
     create_output_dir
     download_containers
-    generate_package_lists
+    download_packages
     generate_load_script
     generate_instructions
     create_offline_archive
 
     echo -e "${GREEN}✓ Offline preparation complete!${NC}"
     echo -e "${YELLOW}Resources saved to archive: lme-offline-*.tar.gz${NC}"
-    echo
-    echo -e "${GREEN}IMPORTANT: Ansible has been installed on this system!${NC}"
-    echo -e "${GREEN}The offline package installation script will install Ansible on the target system.${NC}"
     echo
     echo -e "${YELLOW}Next steps:${NC}"
     echo "1. Transfer the lme-offline-*.tar.gz file to your target system"
