@@ -474,9 +474,19 @@ if [ "$OFFLINE_MODE" = "true" ]; then
             sudo systemctl start nix-daemon 2>/dev/null || true
             sleep 5
 
-            # Import Nix packages
+            # Import Nix packages into store
             export PATH=$PATH:/nix/var/nix/profiles/default/bin
             sudo nix-store --import < "$SCRIPT_DIR/offline_resources/packages/nix/podman-closure.nar"
+
+            # Find the podman store path and install it directly
+            PODMAN_STORE_PATH=$(find /nix/store -maxdepth 1 -name "*-podman-*" | head -1)
+            if [ -n "$PODMAN_STORE_PATH" ]; then
+                echo -e "${YELLOW}Installing podman from store path: $PODMAN_STORE_PATH${NC}"
+                sudo nix-env -i "$PODMAN_STORE_PATH"
+            else
+                echo -e "${RED}✗ Could not find podman in Nix store${NC}"
+                exit 1
+            fi
 
             # Remove any existing Ubuntu podman to avoid conflicts
             sudo apt-get remove -y podman 2>/dev/null || true
