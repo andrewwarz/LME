@@ -466,6 +466,31 @@ if [ "$OFFLINE_MODE" = "true" ]; then
         cd "$SCRIPT_DIR/offline_resources/packages"
         ./install_packages_offline.sh
 
+        # Import Nix packages and set up podman
+        echo -e "${YELLOW}Setting up Nix and Podman...${NC}"
+        if [ -f "$SCRIPT_DIR/offline_resources/packages/nix/podman-closure.nar" ]; then
+            # Ensure Nix daemon is running
+            sudo systemctl enable nix-daemon 2>/dev/null || true
+            sudo systemctl start nix-daemon 2>/dev/null || true
+            sleep 5
+
+            # Import Nix packages
+            export PATH=$PATH:/nix/var/nix/profiles/default/bin
+            sudo nix-store --import < "$SCRIPT_DIR/offline_resources/packages/nix/podman-closure.nar"
+
+            # Create podman symlink
+            sudo ln -sf /nix/var/nix/profiles/default/bin/podman /usr/local/bin/podman 2>/dev/null || true
+
+            # Update PATH for current session and future sessions
+            export PATH=$PATH:/nix/var/nix/profiles/default/bin
+            echo 'export PATH=$PATH:/nix/var/nix/profiles/default/bin' | sudo tee -a /root/.profile >/dev/null
+            echo 'export PATH=$PATH:/nix/var/nix/profiles/default/bin' | sudo tee -a /root/.bashrc >/dev/null
+
+            echo -e "${GREEN}✓ Podman set up from offline Nix packages${NC}"
+        else
+            echo -e "${YELLOW}⚠ No Nix packages found, assuming podman is already available${NC}"
+        fi
+
         # Load containers
         echo -e "${YELLOW}Loading container images...${NC}"
         cd "$SCRIPT_DIR/offline_resources"
