@@ -449,6 +449,37 @@ if [ "$OFFLINE_MODE" = "true" ]; then
     echo -e "${YELLOW}⚠ OFFLINE MODE ENABLED${NC}"
     echo -e "${YELLOW}⚠ Internet-dependent operations will be skipped${NC}"
     echo
+
+    # Look for offline archive and extract it
+    echo -e "${YELLOW}Looking for offline installation archive...${NC}"
+    OFFLINE_ARCHIVE=$(find "$SCRIPT_DIR" -name "lme-offline-*.tar.gz" | head -1)
+
+    if [ -n "$OFFLINE_ARCHIVE" ]; then
+        echo -e "${GREEN}✓ Found offline archive: $(basename "$OFFLINE_ARCHIVE")${NC}"
+        echo -e "${YELLOW}Extracting offline resources...${NC}"
+
+        # Extract archive
+        tar -xzf "$OFFLINE_ARCHIVE" -C "$SCRIPT_DIR"
+
+        # Install packages
+        echo -e "${YELLOW}Installing required packages...${NC}"
+        cd "$SCRIPT_DIR/offline_resources/packages"
+        ./install_packages_offline.sh
+
+        # Load containers
+        echo -e "${YELLOW}Loading container images...${NC}"
+        cd "$SCRIPT_DIR/offline_resources"
+        ./load_containers.sh
+
+        # Return to original directory
+        cd "$SCRIPT_DIR"
+
+        echo -e "${GREEN}✓ Offline resources prepared successfully${NC}"
+    else
+        echo -e "${RED}✗ No offline archive found (lme-offline-*.tar.gz)${NC}"
+        echo -e "${YELLOW}Please ensure the offline archive is in the same directory as install.sh${NC}"
+        exit 1
+    fi
 fi
 
 # Check sudo access first

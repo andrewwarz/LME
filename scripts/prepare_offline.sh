@@ -208,18 +208,14 @@ if [ ! -d "$DEBS_DIR" ]; then
     exit 1
 fi
 
-# Install packages from local cache
+# Install packages from local .deb files
 echo -e "${YELLOW}Installing packages from local .deb files...${NC}"
 cd "$DEBS_DIR"
 
 # Install all .deb files
 if ls *.deb 1> /dev/null 2>&1; then
     echo -e "${YELLOW}Installing .deb packages...${NC}"
-    sudo dpkg -i *.deb 2>/dev/null || true
-
-    # Fix any dependency issues
-    echo -e "${YELLOW}Fixing any dependency issues...${NC}"
-    sudo apt-get install -f -y 2>/dev/null || true
+    sudo dpkg -i *.deb
 
     echo -e "${GREEN}✓ Package installation complete!${NC}"
 else
