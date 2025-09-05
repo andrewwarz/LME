@@ -326,7 +326,7 @@
         
     - name: Tag new containers
       shell: |
-        {{ podman_cmd }} image tag {{ item }} {{ item.split('/')[-1].split(':')[0] }}:LME_LATEST
+        {{ podman_cmd }} image tag {{ item }} localhost/{{ item.split('/')[-1].split(':')[0] }}:LME_LATEST
       args:
         executable: /bin/bash
       loop: "{{ lookup('file', clone_directory + '/config/containers.txt').splitlines() }}"

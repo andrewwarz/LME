@@ -26,7 +26,7 @@ PodmanArgs=--network-alias lme-fleet-server --requires 'lme-elasticsearch,lme-ki
 PublishPort=8220:8220
 Volume=lme_certs:/certs:ro
 Volume=lme_fleet_data:/usr/share/elastic-agent
-UserNS=auto:uidmapping=0:171632:3048,gidmapping=0:171632:3048
+
 
 #TODO: fix this, need to check if its ready before polling API
 #HealthCmd=CMD-SHELL curl -s --cacert /certs/ca/ca.crt https://localhost:8220/api/status | grep '"status":"HEALTHY"'
