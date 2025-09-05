@@ -142,6 +142,47 @@
     msg: "Fleet setup response: {{ fleet_setup }}"
   when: debug_mode | bool
 
+- name: Wait for Fleet distribution server to be ready (offline mode)
+  uri:
+    url: "http://{{ ipvar }}:8080/health"
+    method: GET
+    validate_certs: no
+    status_code: [200]
+  register: distribution_health
+  until: distribution_health.status == 200
+  retries: 30
+  delay: 10
+  when: offline_mode | default(false)
+  ignore_errors: yes
+
+- name: Debug distribution server health
+  debug:
+    msg: "Distribution server health: {{ distribution_health }}"
+  when:
+    - offline_mode | default(false)
+    - debug_mode | bool
+
+- name: Configure Kibana for offline Fleet distribution server
+  lineinfile:
+    path: "/opt/lme/config/kibana.yml"
+    regexp: "^xpack.fleet.registryUrl:"
+    line: "xpack.fleet.registryUrl: http://{{ ipvar }}:8080"
+    insertafter: "^xpack.fleet.agentPolicies:"
+    state: present
+  become: yes
+  when: offline_mode | default(false)
+  notify: restart kibana
+
+- name: Ensure Kibana config directory exists
+  file:
+    path: "/opt/lme/config"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  when: offline_mode | default(false)
+
 - name: Get CA fingerprint
   ansible.builtin.shell: |
     set -a
@@ -175,6 +216,7 @@
     body_format: json
     body:
       fleet_server_hosts: ["https://{{ ipvar }}:{{ fleet_port }}"]
+      package_registry_host: "{{ 'http://' + ipvar + ':8080' if offline_mode | default(false) else omit }}"
     status_code: [200]
   register: fleet_server_hosts_result
   retries: 3

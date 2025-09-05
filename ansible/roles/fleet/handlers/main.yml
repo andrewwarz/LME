@@ -1,0 +1,8 @@
+---
+# Fleet role handlers
+
+- name: restart kibana
+  systemd:
+    name: lme-kibana.service
+    state: restarted
+  become: yes

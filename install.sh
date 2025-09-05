@@ -13,6 +13,8 @@ CUSTOM_IP=""
 HAS_SUDO_ACCESS=""
 IPVAR=""
 DEBUG_MODE="false"
+OFFLINE_MODE="false"
+SKIP_PACKAGES="false"
 
 # Environment variables for non-interactive mode
 NON_INTERACTIVE=${NON_INTERACTIVE:-false}
@@ -26,6 +28,8 @@ usage() {
     echo "OPTIONS:"
     echo "  -i, --ip IP_ADDRESS           Specify IP address manually"
     echo "  -d, --debug                   Enable debug mode for verbose output"
+    echo "  -o, --offline                 Enable offline mode (skip internet-dependent tasks)"
+    echo "  --skip-packages               Skip package installation (for development)"
     echo "  -p, --playbook PLAYBOOK_PATH  Specify path to playbook (default: ./ansible/site.yml)"
     echo "  -h, --help                    Show this help message"
     echo
@@ -48,6 +52,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -d|--debug)
             DEBUG_MODE="true"
+            shift
+            ;;
+        -o|--offline)
+            OFFLINE_MODE="true"
+            shift
+            ;;
+        --skip-packages)
+            SKIP_PACKAGES="true"
             shift
             ;;
         -p|--playbook)
@@ -91,7 +103,7 @@ detect_distro() {
     else
         DISTRO=$(uname -s)
     fi
-    
+
     echo -e "${GREEN}Detected distribution: ${DISTRO}${NC}"
 }
 
@@ -101,9 +113,9 @@ wait_for_apt() {
     local attempt=1
     local max_kill_attempts=3  # Maximum number of kill attempts
     local kill_attempt=0
-    
+
     echo -e "${YELLOW}Waiting for apt locks to be released...${NC}"
-    
+
     while [ $attempt -le $max_attempts ]; do
         # First check if any apt/dpkg processes are running
         if ! lsof /var/lib/apt/lists/lock >/dev/null 2>&1 && \
@@ -112,7 +124,7 @@ wait_for_apt() {
             echo -e "${GREEN}✓ Apt locks are free${NC}"
             return 0
         fi
-        
+
         # If we've been waiting for a long time (30+ attempts), try to kill hung processes
         if [ $attempt -gt 30 ] && [ $kill_attempt -lt $max_kill_attempts ]; then
             kill_attempt=$((kill_attempt + 1))
@@ -127,12 +139,12 @@ wait_for_apt() {
             done
             sleep 5  # Give it a moment to clean up after kill
         fi
-        
+
         echo -n "."
         sleep 10
         attempt=$((attempt + 1))
     done
-    
+
     echo -e "\n${RED}Error: Apt is still locked after 10 minutes. Please check system processes.${NC}"
     return 1
 }
@@ -143,39 +155,48 @@ apt_get_wrapper() {
     local retry=0
     local command=("$@")
     local result=1
-    
+
     while [ $retry -lt $max_retries ] && [ $result -ne 0 ]; do
         if [ $retry -gt 0 ]; then
             echo -e "${YELLOW}Retrying apt-get command (attempt $((retry+1)) of $max_retries)...${NC}"
             # Wait for any locks before retrying
             wait_for_apt || return 1
         fi
-        
+
         echo -e "${YELLOW}Running: ${command[*]}${NC}"
         "${command[@]}"
         result=$?
-        
+
         if [ $result -ne 0 ]; then
             retry=$((retry+1))
             echo -e "${YELLOW}Command failed with exit code $result. Waiting before retry...${NC}"
             sleep 10
         fi
     done
-    
+
     if [ $result -ne 0 ]; then
         echo -e "${RED}Command failed after $max_retries retries: ${command[*]}${NC}"
     fi
-    
+
     return $result
 }
 
 # Function to install Ansible on different distributions
 install_ansible() {
+    if [ "$OFFLINE_MODE" = "true" ]; then
+        echo -e "${RED}✗ Cannot install Ansible in offline mode.${NC}"
+        echo -e "${YELLOW}Please install Ansible manually before running this script in offline mode.${NC}"
+        echo -e "${YELLOW}For Ubuntu/Debian: sudo apt-get install ansible${NC}"
+        echo -e "${YELLOW}For RHEL/CentOS: sudo dnf install ansible${NC}"
+        echo -e "${YELLOW}For other distributions, consult your package manager.${NC}"
+        exit 1
+    fi
+
     echo -e "${YELLOW}Installing Ansible...${NC}"
-    
+
     # Set noninteractive mode for apt-based installations
     export DEBIAN_FRONTEND=noninteractive
-    
+
     case $DISTRO in
         ubuntu|debian|linuxmint|pop)
             sudo ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
@@ -206,7 +227,7 @@ install_ansible() {
             exit 1
             ;;
     esac
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Ansible installation completed successfully!${NC}"
     else
@@ -221,26 +242,26 @@ check_playbook() {
         echo -e "${RED}Error: Playbook not found at $PLAYBOOK_PATH${NC}"
         exit 1
     fi
-    
+
     echo -e "${GREEN}✓ Playbook found at $PLAYBOOK_PATH${NC}"
 }
 
 # Function to find IP addresses of the machine
 get_ip_addresses() {
     echo -e "${YELLOW}Detecting IP addresses...${NC}"
-    
+
     # If AUTO_IP is set, use it
     if [ -n "$AUTO_IP" ]; then
         echo -e "${GREEN}Using provided AUTO_IP: ${AUTO_IP}${NC}"
         IPVAR="$AUTO_IP"
         return 0
     fi
-    
+
     # Array to store the found IP addresses
     declare -a IPS
-    
+
     # Try different methods to find IP addresses
-    
+
     # Method 1: Using hostname
     if command -v hostname >/dev/null 2>&1; then
         if hostname -I >/dev/null 2>&1; then
@@ -252,7 +273,7 @@ get_ip_addresses() {
             done
         fi
     fi
-    
+
     # Method 2: Using ip command
     if command -v ip >/dev/null 2>&1; then
         IP_ADDR_IPS=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
@@ -262,7 +283,7 @@ get_ip_addresses() {
             fi
         done
     fi
-    
+
     # Method 3: Using ifconfig command
     if command -v ifconfig >/dev/null 2>&1; then
         IFCONFIG_IPS=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1')
@@ -272,14 +293,14 @@ get_ip_addresses() {
             fi
         done
     fi
-    
+
     # If a custom IP was provided via command line, use it instead
     if [[ -n "$CUSTOM_IP" ]]; then
         echo -e "${GREEN}Using provided IP address: ${CUSTOM_IP}${NC}"
         IPVAR="$CUSTOM_IP"
         return 0
     fi
-    
+
     # Check if we found any IP addresses
     if [ ${#IPS[@]} -eq 0 ]; then
         echo -e "${RED}Could not detect any IP addresses.${NC}"
@@ -290,23 +311,23 @@ get_ip_addresses() {
         prompt_for_ip
         return 0
     fi
-    
+
     # Print all detected IP addresses
     echo -e "${GREEN}Found ${#IPS[@]} IP address(es):${NC}"
     for i in "${!IPS[@]}"; do
         echo "  $((i+1)). ${IPS[$i]}"
     done
-    
+
     # In non-interactive mode, use the first IP
     if [ "$NON_INTERACTIVE" = "true" ]; then
         IPVAR="${IPS[0]}"
         echo -e "${GREEN}Using first detected IP in non-interactive mode: ${IPVAR}${NC}"
         return 0
     fi
-    
+
     # Ask user to select an IP or use the first one detected
     prompt_ip_selection
-    
+
     return 0
 }
 
@@ -317,9 +338,9 @@ prompt_ip_selection() {
     echo "  Enter a number from the list above"
     echo "  Enter 'c' to specify a custom IP"
     echo "  Press Enter to use the first detected IP (${IPS[0]})"
-    
+
     read -p "> " selection
-    
+
     if [[ -z "$selection" ]]; then
         # Default to first IP
         IPVAR="${IPS[0]}"
@@ -340,11 +361,11 @@ prompt_ip_selection() {
 # Function to prompt user to enter a custom IP address
 prompt_for_ip() {
     local valid_ip=false
-    
+
     while [ "$valid_ip" = false ]; do
         echo -e "${YELLOW}Please enter a valid IP address:${NC}"
         read -p "> " custom_ip
-        
+
         if [[ $custom_ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             IPVAR="$custom_ip"
             valid_ip=true
@@ -358,17 +379,17 @@ prompt_for_ip() {
 # Function to check for sudo access
 check_sudo_access() {
     echo -e "${YELLOW}Checking sudo access...${NC}"
-    
+
     # First check for passwordless sudo
     if sudo -n true 2>/dev/null; then
         echo -e "${GREEN}✓ Passwordless sudo access available${NC}"
         HAS_SUDO_ACCESS="true"
         return 0
     fi
-    
+
     # If no passwordless sudo, check if we can use sudo with a password
     echo -e "${YELLOW}⚠ Passwordless sudo access not available, checking if sudo access is possible with password...${NC}"
-    
+
     # Attempt to use sudo with password prompt
     if sudo -v; then
         echo -e "${GREEN}✓ Sudo access available (will require password)${NC}"
@@ -380,10 +401,31 @@ check_sudo_access() {
     fi
 }
 
+# Function to restore original quadlet files
+restore_quadlet_files() {
+    if [ "$OFFLINE_MODE" = "true" ]; then
+        echo -e "${YELLOW}Restoring original quadlet files...${NC}"
+
+        QUADLET_SOURCE_DIR="$SCRIPT_DIR/quadlet"
+
+        # Restore from backups if they exist
+        for backup_file in "$QUADLET_SOURCE_DIR"/*.backup.*; do
+            if [ -f "$backup_file" ]; then
+                original_file="${backup_file%%.backup.*}"
+                echo -e "${YELLOW}Restoring $(basename "$original_file")...${NC}"
+                cp "$backup_file" "$original_file"
+                echo -e "${GREEN}✓ Restored $(basename "$original_file")${NC}"
+            fi
+        done
+
+        echo -e "${GREEN}✓ Original quadlet files restored${NC}"
+    fi
+}
+
 # Function to run the playbook
 run_playbook() {
     echo -e "${YELLOW}Running Ansible playbook...${NC}"
-    
+
     # If sudo requires password, we need to pass -K for sudo password
     if [ "${HAS_SUDO_ACCESS}" = "false" ]; then
         ANSIBLE_OPTS="-K"
@@ -396,25 +438,115 @@ run_playbook() {
     else
         ANSIBLE_OPTS=""
     fi
-    
+
     # Add debug mode if enabled
     if [ "$DEBUG_MODE" = "true" ]; then
         echo -e "${YELLOW}Debug mode enabled - verbose output will be shown${NC}"
         ANSIBLE_OPTS="$ANSIBLE_OPTS -e debug_mode=true"
     fi
-    
+
+    # Add offline mode message
+    if [ "$OFFLINE_MODE" = "true" ]; then
+        echo -e "${YELLOW}⚠ Running in offline mode - skipping internet-dependent tasks${NC}"
+    fi
+
+    # Apply container configuration fixes BEFORE running Ansible in offline mode
+    # This prevents UserNS mapping issues that cause container startup failures
+    if [ "$OFFLINE_MODE" = "true" ]; then
+        echo -e "${YELLOW}Pre-applying container configuration fixes for offline mode...${NC}"
+        if [ -f "$SCRIPT_DIR/offline_resources/fix_container_configs.sh" ]; then
+            # Create a pre-fix version that works on the source quadlet files
+            echo -e "${YELLOW}Creating pre-installation container fixes...${NC}"
+
+            # Apply fixes to source quadlet files before they're copied by Ansible
+            QUADLET_SOURCE_DIR="$SCRIPT_DIR/quadlet"
+
+            if [ -d "$QUADLET_SOURCE_DIR" ]; then
+                echo -e "${YELLOW}Fixing UserNS mapping issues in source quadlet files...${NC}"
+
+                # List of containers that commonly have UserNS mapping issues in offline mode
+                CONTAINERS_TO_FIX=(
+                    "lme-fleet-distribution.container"
+                    "lme-fleet-server.container"
+                    "lme-elasticsearch.container"
+                    "lme-kibana.container"
+                    "lme-wazuh-manager.container"
+                    "lme-elastalert.container"
+                )
+
+                for container_file in "${CONTAINERS_TO_FIX[@]}"; do
+                    CONTAINER_PATH="$QUADLET_SOURCE_DIR/$container_file"
+
+                    if [ -f "$CONTAINER_PATH" ]; then
+                        echo -e "${YELLOW}Pre-fixing $container_file...${NC}"
+
+                        # Backup original file
+                        cp "$CONTAINER_PATH" "$CONTAINER_PATH.backup.$(date +%Y%m%d-%H%M%S)"
+
+                        # Remove problematic UserNS line
+                        sed -i '/^UserNS=auto:uidmapping=/d' "$CONTAINER_PATH"
+
+                        echo -e "${GREEN}✓ Pre-fixed $container_file${NC}"
+                    else
+                        echo -e "${YELLOW}⚠ $container_file not found in source, skipping${NC}"
+                    fi
+                done
+
+                echo -e "${GREEN}✓ Source container configuration fixes applied${NC}"
+            else
+                echo -e "${RED}✗ Source quadlet directory not found: $QUADLET_SOURCE_DIR${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${YELLOW}⚠ Container configuration fix script not found, applying manual fixes${NC}"
+
+            # Apply manual fixes if the script is not available
+            QUADLET_SOURCE_DIR="$SCRIPT_DIR/quadlet"
+
+            if [ -d "$QUADLET_SOURCE_DIR" ]; then
+                echo -e "${YELLOW}Applying manual UserNS mapping fixes...${NC}"
+
+                # List of containers to fix manually
+                MANUAL_CONTAINERS_TO_FIX=(
+                    "lme-fleet-distribution.container"
+                    "lme-fleet-server.container"
+                    "lme-elasticsearch.container"
+                    "lme-kibana.container"
+                    "lme-wazuh-manager.container"
+                    "lme-elastalert.container"
+                )
+
+                for container_file in "${MANUAL_CONTAINERS_TO_FIX[@]}"; do
+                    if [ -f "$QUADLET_SOURCE_DIR/$container_file" ]; then
+                        cp "$QUADLET_SOURCE_DIR/$container_file" "$QUADLET_SOURCE_DIR/$container_file.backup.$(date +%Y%m%d-%H%M%S)"
+                        sed -i '/^UserNS=auto:uidmapping=/d' "$QUADLET_SOURCE_DIR/$container_file"
+                        echo -e "${GREEN}✓ Fixed $container_file${NC}"
+                    fi
+                done
+
+                echo -e "${GREEN}✓ Manual container configuration fixes applied${NC}"
+            fi
+        fi
+    fi
+
     # Run the main installation playbook
     echo -e "${YELLOW}Running main installation playbook...${NC}"
     if [ -f "./inventory" ]; then
-        ansible-playbook -i inventory "$PLAYBOOK_PATH" --extra-vars '{"has_sudo_access":"'"${HAS_SUDO_ACCESS}"'","clone_dir":"'"${SCRIPT_DIR}"'"}' $ANSIBLE_OPTS
+        ansible-playbook -i inventory "$PLAYBOOK_PATH" --extra-vars '{"has_sudo_access":"'"${HAS_SUDO_ACCESS}"'","clone_dir":"'"${SCRIPT_DIR}"'","offline_mode":'"${OFFLINE_MODE}"'}' $ANSIBLE_OPTS
     else
-        ansible-playbook "$PLAYBOOK_PATH" --extra-vars '{"has_sudo_access":"'"${HAS_SUDO_ACCESS}"'","clone_dir":"'"${SCRIPT_DIR}"'"}' $ANSIBLE_OPTS
+        ansible-playbook "$PLAYBOOK_PATH" --extra-vars '{"has_sudo_access":"'"${HAS_SUDO_ACCESS}"'","clone_dir":"'"${SCRIPT_DIR}"'","offline_mode":'"${OFFLINE_MODE}"'}' $ANSIBLE_OPTS
     fi
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Main installation playbook completed successfully!${NC}"
+
+        # Restore original quadlet files after successful installation
+        restore_quadlet_files
     else
         echo -e "${RED}✗ Main installation playbook failed.${NC}"
+
+        # Restore original quadlet files even on failure
+        restore_quadlet_files
         exit 1
     fi
 }
@@ -423,6 +555,103 @@ run_playbook() {
 echo "==============================================="
 echo "    Ansible Setup and Playbook Runner"
 echo "==============================================="
+
+# Display offline mode status early
+if [ "$OFFLINE_MODE" = "true" ]; then
+    echo -e "${YELLOW}⚠ OFFLINE MODE ENABLED${NC}"
+    echo -e "${YELLOW}⚠ Internet-dependent operations will be skipped${NC}"
+    echo
+
+    # Look for offline archive and extract it
+    echo -e "${YELLOW}Looking for offline installation archive...${NC}"
+    OFFLINE_ARCHIVE=$(find "$SCRIPT_DIR" -name "lme-offline-*.tar.gz" | head -1)
+
+    if [ -n "$OFFLINE_ARCHIVE" ]; then
+        echo -e "${GREEN}✓ Found offline archive: $(basename "$OFFLINE_ARCHIVE")${NC}"
+        
+        # Check if already extracted
+        if [ -d "$SCRIPT_DIR/offline_resources" ]; then
+            echo -e "${GREEN}✓ Offline resources already extracted, skipping extraction${NC}"
+        else
+            echo -e "${YELLOW}Extracting offline resources...${NC}"
+            # Extract archive
+            tar -xzf "$OFFLINE_ARCHIVE" -C "$SCRIPT_DIR"
+        fi
+
+        # Install packages
+        if [ "$SKIP_PACKAGES" = "true" ]; then
+            echo -e "${YELLOW}Skipping package installation (--skip-packages flag enabled)${NC}"
+        else
+            echo -e "${YELLOW}Installing required packages...${NC}"
+            cd "$SCRIPT_DIR/offline_resources/packages"
+            if [ -f "./install_packages_offline.sh" ]; then
+                ./install_packages_offline.sh
+                if [ $? -ne 0 ]; then
+                    echo -e "${RED}✗ Package installation failed${NC}"
+                    exit 1
+                fi
+            else
+                echo -e "${RED}✗ Package installation script not found${NC}"
+                exit 1
+            fi
+        fi
+
+        # Load containers
+        echo -e "${YELLOW}Loading container images...${NC}"
+        cd "$SCRIPT_DIR/offline_resources"
+        
+        # Check if containers are already loaded
+        if sudo podman images --format "{{.Repository}}" | grep -q "localhost\|docker\." > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ Container images already loaded, skipping container loading${NC}"
+        else
+            if [ -f "./load_containers.sh" ]; then
+                ./load_containers.sh
+                if [ $? -ne 0 ]; then
+                    echo -e "${RED}✗ Container loading failed${NC}"
+                    exit 1
+                fi
+            else
+                echo -e "${RED}✗ Container loading script not found${NC}"
+                exit 1
+            fi
+        fi
+
+        # Return to original directory
+        cd "$SCRIPT_DIR"
+
+        # Verify podman is now available
+        echo -e "${YELLOW}Verifying podman installation...${NC}"
+        # Update PATH to include potential Nix locations
+        export PATH=/nix/var/nix/profiles/default/bin:$PATH
+        
+        if command -v podman >/dev/null 2>&1; then
+            PODMAN_VERSION=$(podman --version)
+            PODMAN_LOCATION=$(which podman)
+            echo -e "${GREEN}✓ Podman is available: $PODMAN_VERSION${NC}"
+            echo -e "${GREEN}✓ Podman location: $PODMAN_LOCATION${NC}"
+        else
+            echo -e "${RED}✗ Podman is still not available after installation${NC}"
+            echo -e "${YELLOW}Checking common locations:${NC}"
+            ls -la /usr/bin/podman* 2>/dev/null || echo "  No podman in /usr/bin/"
+            ls -la /usr/local/bin/podman* 2>/dev/null || echo "  No podman in /usr/local/bin/"
+            ls -la /nix/var/nix/profiles/default/bin/podman* 2>/dev/null || echo "  No podman in Nix default profile"
+            echo -e "${YELLOW}PATH: $PATH${NC}"
+            exit 1
+        fi
+
+        # Create offline mode marker files
+        echo -e "${YELLOW}Creating offline mode marker files...${NC}"
+        sudo mkdir -p /opt/lme
+        sudo touch /opt/lme/OFFLINE_MODE
+        sudo touch /opt/lme/FLEET_SETUP_FINISHED
+
+        echo -e "${GREEN}✓ Offline resources prepared successfully${NC}"
+    else
+        echo -e "${RED}✗ No offline archive found (lme-offline-*.tar.gz)${NC}"
+        echo -e "${YELLOW}Please ensure the offline archive is in the same directory as install.sh${NC}"
+        exit 1
+    fi
+fi
 
 # Check sudo access first
 check_sudo_access
@@ -490,10 +719,20 @@ fi
 # Check if ansible is already installed
 check_ansible
 if [ $? -ne 0 ]; then
+    # In offline mode, ansible must be pre-installed
+    if [ "$OFFLINE_MODE" = "true" ]; then
+        echo -e "${RED}✗ Ansible is required but not installed.${NC}"
+        echo -e "${YELLOW}In offline mode, Ansible must be pre-installed.${NC}"
+        echo -e "${YELLOW}Please install Ansible manually:${NC}"
+        echo -e "${YELLOW}  For Ubuntu/Debian: sudo apt-get install ansible${NC}"
+        echo -e "${YELLOW}  For RHEL/CentOS: sudo dnf install ansible${NC}"
+        exit 1
+    fi
+
     # Detect distribution and install ansible
     detect_distro
     install_ansible
-    
+
     # Verify installation
     if ! check_ansible; then
         echo -e "${RED}Failed to verify Ansible installation. Please install manually.${NC}"

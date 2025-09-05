@@ -1,0 +1,27 @@
+[Unit]
+Description=Fleet Container Service
+Requires=lme-elasticsearch.service
+After=lme-elasticsearch.service lme-kibana.service
+PartOf=lme.service
+ConditionPathExists=/opt/lme/FLEET_SETUP_FINISHED
+
+[Service]
+Restart=always
+TimeoutStartSec=5400
+Environment=ANSIBLE_VAULT_PASSWORD_FILE=/etc/lme/pass.sh
+
+[Install]
+WantedBy=default.target lme.service
+
+[Container]
+ContainerName=lme-fleet-server
+EnvironmentFile=/opt/lme/lme-environment.env
+Secret=elastic,type=env,target=KIBANA_FLEET_PASSWORD
+Image=localhost/elastic-agent:LME_LATEST
+Network=lme
+HostName=lme-fleet-server
+PodmanArgs=--network-alias lme-fleet-server --requires 'lme-elasticsearch,lme-kibana'
+PublishPort=8220:8220
+Volume=lme_certs:/certs:ro
+Volume=lme_fleet_data:/usr/share/elastic-agent
+UserNS=auto:uidmapping=0:171632:3048,gidmapping=0:171632:3048
