@@ -23,6 +23,7 @@
     wazuh_password: "{{ global_secrets.wazuh | default('') }}"
     kibana_system_password: "{{ global_secrets.kibana_system | default('') }}"
     wazuh_api_password: "{{ global_secrets.wazuh_api | default('') }}"
+    kibana_version: "{{ stack_version }}"
 
 - name: Debug - Display set variables (sensitive information redacted)
   debug:
@@ -201,6 +202,21 @@
     var: ca_fingerprint.stdout
   when: debug_mode | bool
 
+- name: Wait for Kibana API to be ready before Fleet configuration
+  uri:
+    url: "{{ local_kbn_url }}/api/status"
+    method: GET
+    user: "{{ elastic_username }}"
+    password: "{{ elastic_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: [200]
+  register: kibana_api_ready
+  until: kibana_api_ready.status == 200
+  retries: 30
+  delay: 10
+  no_log: "{{ not debug_mode }}"
+
 - name: Set Fleet server hosts
   uri:
     url: "{{ local_kbn_url }}/api/fleet/settings"
@@ -219,8 +235,8 @@
       package_registry_host: "{{ 'http://' + ipvar + ':8080' if offline_mode | default(false) else omit }}"
     status_code: [200]
   register: fleet_server_hosts_result
-  retries: 3
-  delay: 10
+  retries: 5
+  delay: 15
   until: fleet_server_hosts_result.status == 200
   no_log: "{{ not debug_mode }}"
 
