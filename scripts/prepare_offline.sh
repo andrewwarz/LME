@@ -446,10 +446,14 @@ if [ ! -d "$SYSTEMD_CONTAINERS_DIR" ]; then
     exit 1
 fi
 
-# List of containers that commonly have UserNS mapping issues
+# List of containers that commonly have UserNS mapping issues in offline mode
 CONTAINERS_TO_FIX=(
     "lme-fleet-distribution.container"
     "lme-fleet-server.container"
+    "lme-elasticsearch.container"
+    "lme-kibana.container"
+    "lme-wazuh-manager.container"
+    "lme-elastalert.container"
 )
 
 for container_file in "${CONTAINERS_TO_FIX[@]}"; do

@@ -401,6 +401,27 @@ check_sudo_access() {
     fi
 }
 
+# Function to restore original quadlet files
+restore_quadlet_files() {
+    if [ "$OFFLINE_MODE" = "true" ]; then
+        echo -e "${YELLOW}Restoring original quadlet files...${NC}"
+
+        QUADLET_SOURCE_DIR="$SCRIPT_DIR/quadlet"
+
+        # Restore from backups if they exist
+        for backup_file in "$QUADLET_SOURCE_DIR"/*.backup.*; do
+            if [ -f "$backup_file" ]; then
+                original_file="${backup_file%%.backup.*}"
+                echo -e "${YELLOW}Restoring $(basename "$original_file")...${NC}"
+                cp "$backup_file" "$original_file"
+                echo -e "${GREEN}✓ Restored $(basename "$original_file")${NC}"
+            fi
+        done
+
+        echo -e "${GREEN}✓ Original quadlet files restored${NC}"
+    fi
+}
+
 # Function to run the playbook
 run_playbook() {
     echo -e "${YELLOW}Running Ansible playbook...${NC}"
@@ -429,6 +450,85 @@ run_playbook() {
         echo -e "${YELLOW}⚠ Running in offline mode - skipping internet-dependent tasks${NC}"
     fi
 
+    # Apply container configuration fixes BEFORE running Ansible in offline mode
+    # This prevents UserNS mapping issues that cause container startup failures
+    if [ "$OFFLINE_MODE" = "true" ]; then
+        echo -e "${YELLOW}Pre-applying container configuration fixes for offline mode...${NC}"
+        if [ -f "$SCRIPT_DIR/offline_resources/fix_container_configs.sh" ]; then
+            # Create a pre-fix version that works on the source quadlet files
+            echo -e "${YELLOW}Creating pre-installation container fixes...${NC}"
+
+            # Apply fixes to source quadlet files before they're copied by Ansible
+            QUADLET_SOURCE_DIR="$SCRIPT_DIR/quadlet"
+
+            if [ -d "$QUADLET_SOURCE_DIR" ]; then
+                echo -e "${YELLOW}Fixing UserNS mapping issues in source quadlet files...${NC}"
+
+                # List of containers that commonly have UserNS mapping issues in offline mode
+                CONTAINERS_TO_FIX=(
+                    "lme-fleet-distribution.container"
+                    "lme-fleet-server.container"
+                    "lme-elasticsearch.container"
+                    "lme-kibana.container"
+                    "lme-wazuh-manager.container"
+                    "lme-elastalert.container"
+                )
+
+                for container_file in "${CONTAINERS_TO_FIX[@]}"; do
+                    CONTAINER_PATH="$QUADLET_SOURCE_DIR/$container_file"
+
+                    if [ -f "$CONTAINER_PATH" ]; then
+                        echo -e "${YELLOW}Pre-fixing $container_file...${NC}"
+
+                        # Backup original file
+                        cp "$CONTAINER_PATH" "$CONTAINER_PATH.backup.$(date +%Y%m%d-%H%M%S)"
+
+                        # Remove problematic UserNS line
+                        sed -i '/^UserNS=auto:uidmapping=/d' "$CONTAINER_PATH"
+
+                        echo -e "${GREEN}✓ Pre-fixed $container_file${NC}"
+                    else
+                        echo -e "${YELLOW}⚠ $container_file not found in source, skipping${NC}"
+                    fi
+                done
+
+                echo -e "${GREEN}✓ Source container configuration fixes applied${NC}"
+            else
+                echo -e "${RED}✗ Source quadlet directory not found: $QUADLET_SOURCE_DIR${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${YELLOW}⚠ Container configuration fix script not found, applying manual fixes${NC}"
+
+            # Apply manual fixes if the script is not available
+            QUADLET_SOURCE_DIR="$SCRIPT_DIR/quadlet"
+
+            if [ -d "$QUADLET_SOURCE_DIR" ]; then
+                echo -e "${YELLOW}Applying manual UserNS mapping fixes...${NC}"
+
+                # List of containers to fix manually
+                MANUAL_CONTAINERS_TO_FIX=(
+                    "lme-fleet-distribution.container"
+                    "lme-fleet-server.container"
+                    "lme-elasticsearch.container"
+                    "lme-kibana.container"
+                    "lme-wazuh-manager.container"
+                    "lme-elastalert.container"
+                )
+
+                for container_file in "${MANUAL_CONTAINERS_TO_FIX[@]}"; do
+                    if [ -f "$QUADLET_SOURCE_DIR/$container_file" ]; then
+                        cp "$QUADLET_SOURCE_DIR/$container_file" "$QUADLET_SOURCE_DIR/$container_file.backup.$(date +%Y%m%d-%H%M%S)"
+                        sed -i '/^UserNS=auto:uidmapping=/d' "$QUADLET_SOURCE_DIR/$container_file"
+                        echo -e "${GREEN}✓ Fixed $container_file${NC}"
+                    fi
+                done
+
+                echo -e "${GREEN}✓ Manual container configuration fixes applied${NC}"
+            fi
+        fi
+    fi
+
     # Run the main installation playbook
     echo -e "${YELLOW}Running main installation playbook...${NC}"
     if [ -f "./inventory" ]; then
@@ -439,26 +539,14 @@ run_playbook() {
 
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Main installation playbook completed successfully!${NC}"
-        
-        # Apply container configuration fixes after Ansible creates the systemd files
-        if [ "$OFFLINE_MODE" = "true" ]; then
-            echo -e "${YELLOW}Applying container configuration fixes for offline mode...${NC}"
-            if [ -f "$SCRIPT_DIR/offline_resources/fix_container_configs.sh" ]; then
-                cd "$SCRIPT_DIR/offline_resources"
-                ./fix_container_configs.sh
-                if [ $? -eq 0 ]; then
-                    echo -e "${GREEN}✓ Container configuration fixes applied successfully${NC}"
-                else
-                    echo -e "${RED}✗ Container configuration fixes failed${NC}"
-                    echo -e "${YELLOW}You may need to manually fix container startup issues${NC}"
-                fi
-                cd "$SCRIPT_DIR"
-            else
-                echo -e "${YELLOW}⚠ Container configuration fix script not found${NC}"
-            fi
-        fi
+
+        # Restore original quadlet files after successful installation
+        restore_quadlet_files
     else
         echo -e "${RED}✗ Main installation playbook failed.${NC}"
+
+        # Restore original quadlet files even on failure
+        restore_quadlet_files
         exit 1
     fi
 }
