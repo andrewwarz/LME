@@ -491,14 +491,14 @@ if [ "$OFFLINE_MODE" = "true" ]; then
             # Remove any existing Ubuntu podman to avoid conflicts
             sudo apt-get remove -y podman 2>/dev/null || true
 
-            # Create podman symlink to override any system podman
-            sudo ln -sf /nix/var/nix/profiles/default/bin/podman /usr/local/bin/podman 2>/dev/null || true
-            sudo ln -sf /nix/var/nix/profiles/default/bin/podman /usr/bin/podman 2>/dev/null || true
+            # Create podman symlinks using the correct per-user profile path
+            sudo ln -sf /nix/var/nix/profiles/per-user/root/profile/bin/podman /usr/local/bin/podman 2>/dev/null || true
+            sudo ln -sf /nix/var/nix/profiles/per-user/root/profile/bin/podman /usr/bin/podman 2>/dev/null || true
 
             # Update PATH for current session and future sessions (put Nix FIRST)
-            export PATH=/nix/var/nix/profiles/default/bin:$PATH
-            echo 'export PATH=/nix/var/nix/profiles/default/bin:$PATH' | sudo tee -a /root/.profile >/dev/null
-            echo 'export PATH=/nix/var/nix/profiles/default/bin:$PATH' | sudo tee -a /root/.bashrc >/dev/null
+            export PATH=/nix/var/nix/profiles/per-user/root/profile/bin:$PATH
+            echo 'export PATH=/nix/var/nix/profiles/per-user/root/profile/bin:$PATH' | sudo tee -a /root/.profile >/dev/null
+            echo 'export PATH=/nix/var/nix/profiles/per-user/root/profile/bin:$PATH' | sudo tee -a /root/.bashrc >/dev/null
 
             echo -e "${GREEN}✓ Podman set up from offline Nix packages${NC}"
         else
