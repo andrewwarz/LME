@@ -23,6 +23,9 @@
     wazuh_password: "{{ global_secrets.wazuh | default('') }}"
     kibana_system_password: "{{ global_secrets.kibana_system | default('') }}"
     wazuh_api_password: "{{ global_secrets.wazuh_api | default('') }}"
+
+- name: Set kibana version from stack version
+  ansible.builtin.set_fact:
     kibana_version: "{{ stack_version }}"
 
 - name: Debug - Display set variables (sensitive information redacted)
