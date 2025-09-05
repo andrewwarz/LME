@@ -513,6 +513,10 @@ if [ "$OFFLINE_MODE" = "true" ]; then
         # Return to original directory
         cd "$SCRIPT_DIR"
 
+        # Create offline mode marker file
+        echo -e "${YELLOW}Creating offline mode marker...${NC}"
+        sudo touch /opt/lme/OFFLINE_MODE
+
         echo -e "${GREEN}✓ Offline resources prepared successfully${NC}"
     else
         echo -e "${RED}✗ No offline archive found (lme-offline-*.tar.gz)${NC}"
