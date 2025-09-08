@@ -220,30 +220,6 @@
   delay: 10
   no_log: "{{ not debug_mode }}"
 
-- name: Set Fleet server hosts (offline mode)
-  uri:
-    url: "{{ local_kbn_url }}/api/fleet/settings"
-    method: PUT
-    user: "{{ elastic_username }}"
-    password: "{{ elastic_password }}"
-    force_basic_auth: yes
-    validate_certs: no
-    headers:
-      kbn-version: "{{ kibana_version }}"
-      kbn-xsrf: "kibana"
-      Content-Type: "application/json"
-    body_format: json
-    body:
-      fleet_server_hosts: ["https://{{ ipvar }}:{{ fleet_port }}"]
-      package_registry_host: "http://{{ ipvar }}:8080"
-    status_code: [200]
-  register: fleet_server_hosts_result
-  retries: 5
-  delay: 15
-  until: fleet_server_hosts_result.status == 200
-  no_log: "{{ not debug_mode }}"
-  when: offline_mode | default(false)
-
 - name: Set Fleet server hosts (online mode)
   uri:
     url: "{{ local_kbn_url }}/api/fleet/settings"
@@ -265,7 +241,6 @@
   delay: 15
   until: fleet_server_hosts_result.status == 200
   no_log: "{{ not debug_mode }}"
-  when: not (offline_mode | default(false))
 
 - name: Debug Fleet server hosts result
   debug:
