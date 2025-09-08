@@ -175,7 +175,6 @@
     state: present
   become: yes
   when: offline_mode | default(false)
-  notify: restart kibana
 
 - name: Ensure Kibana config directory exists
   file:
