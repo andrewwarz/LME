@@ -1,8 +1,8 @@
 # lme-fleet-distribution.container
 [Unit]
 Description=Fleet Distribution Server Container Service
-Requires=lme-elasticsearch.service
-After=lme-elasticsearch.service
+Requires=lme-elasticsearch.service lme-setup-certs.service
+After=lme-elasticsearch.service lme-setup-certs.service
 PartOf=lme.service
 ConditionPathExists=/opt/lme/OFFLINE_MODE
 
@@ -20,10 +20,12 @@ Network=lme
 HostName=lme-fleet-distribution
 PodmanArgs=--network-alias lme-fleet-distribution
 PublishPort=8080:8080
+Volume=lme_certs:/certs:ro
+Environment=REGISTRY_HTTP_TLS_CERTIFICATE=/certs/fleet-distribution/fleet-distribution.crt REGISTRY_HTTP_TLS_KEY=/certs/fleet-distribution/fleet-distribution.key
 
 
 # Health check to ensure the distribution server is ready
-HealthCmd=CMD-SHELL curl -f http://localhost:8080/health || exit 1
+HealthCmd=CMD-SHELL curl -f -k https://localhost:8080/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3

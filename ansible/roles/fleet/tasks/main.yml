@@ -148,7 +148,7 @@
 
 - name: Wait for Fleet distribution server to be ready (offline mode)
   uri:
-    url: "http://{{ ipvar }}:8080/health"
+    url: "https://lme-fleet-distribution:8080/health"
     method: GET
     validate_certs: no
     status_code: [200]
@@ -166,15 +166,7 @@
     - offline_mode | default(false)
     - debug_mode | bool
 
-- name: Configure Kibana for offline Fleet distribution server
-  lineinfile:
-    path: "/opt/lme/config/kibana.yml"
-    regexp: "^xpack.fleet.registryUrl:"
-    line: "xpack.fleet.registryUrl: http://{{ ipvar }}:8080"
-    insertafter: "^xpack.fleet.agentPolicies:"
-    state: present
-  become: yes
-  when: offline_mode | default(false)
+
 
 - name: Ensure Kibana config directory exists
   file:

@@ -543,6 +543,20 @@ if [ "$OFFLINE_MODE" = "true" ]; then
         sudo touch /opt/lme/OFFLINE_MODE
         sudo touch /opt/lme/FLEET_SETUP_FINISHED
 
+        # Configure Kibana for offline Fleet distribution server
+        echo -e "${YELLOW}Configuring Kibana for offline Fleet distribution server...${NC}"
+        sudo mkdir -p /opt/lme/config
+        if [ ! -f /opt/lme/config/kibana.yml ]; then
+            sudo touch /opt/lme/config/kibana.yml
+        fi
+
+        # Add or update the Fleet registry URL for offline mode
+        if sudo grep -q "^xpack.fleet.registryUrl:" /opt/lme/config/kibana.yml; then
+            sudo sed -i 's|^xpack.fleet.registryUrl:.*|xpack.fleet.registryUrl: https://lme-fleet-distribution:8080|' /opt/lme/config/kibana.yml
+        else
+            echo "xpack.fleet.registryUrl: https://lme-fleet-distribution:8080" | sudo tee -a /opt/lme/config/kibana.yml > /dev/null
+        fi
+
         echo -e "${GREEN}✓ Offline resources prepared successfully${NC}"
     else
         echo -e "${RED}✗ No offline archive found (lme-offline-*.tar.gz)${NC}"
