@@ -148,7 +148,7 @@
 
 - name: Wait for Fleet distribution server to be ready (offline mode)
   uri:
-    url: "https://lme-fleet-distribution:8080/health"
+    url: "http://{{ ipvar }}:8080/health"
     method: GET
     validate_certs: no
     status_code: [200]
