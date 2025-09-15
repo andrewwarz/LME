@@ -772,25 +772,17 @@ Steps for Offline Installation:
 2. Extract the archive:
    tar -xzf lme-offline-*.tar.gz
 
-3. Navigate to the extracted LME directory:
+3. Navigate to the extracted LME directory and run installation:
    cd LME
-
-4. Install required system packages:
-   cd offline_resources/packages/
-   sudo ./install_packages_offline.sh
-
-5. Load container images:
-   cd ../
-   ./load_containers.sh
-
-6. Verify images are loaded:
-   sudo podman images
-
-7. Run LME installation in offline mode:
-   cd ../
    ./install.sh --offline
 
-8. Install agents on endpoint systems:
+   The install script will automatically:
+   - Install required system packages
+   - Load container images
+   - Configure and start LME services
+   - Set up CVE database for offline vulnerability detection
+
+4. Install agents on endpoint systems:
    - Agent installers are available in the offline_resources/agents/ directory
    - Configure agents to connect to your LME server IP/hostname
 
@@ -847,9 +839,9 @@ main() {
     echo "1. Transfer the lme-offline-*.tar.gz file to your target system"
     echo "2. Extract: tar -xzf lme-offline-*.tar.gz"
     echo "3. Navigate to extracted directory: cd LME"
-    echo "4. Install packages: cd offline_resources/packages && sudo ./install_packages_offline.sh"
-    echo "5. Load containers: cd .. && ./load_containers.sh"
-    echo "6. Run LME installation: cd .. && ./install.sh --offline"
+    echo "4. Run installation: ./install.sh --offline"
+    echo ""
+    echo "The install script will automatically handle packages, containers, and configuration."
     echo
     echo -e "${YELLOW}For detailed instructions, see the extracted docs/OFFLINE_INSTALLATION_INSTRUCTIONS.txt${NC}"
 }
