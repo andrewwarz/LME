@@ -466,14 +466,22 @@ if [ "$OFFLINE_MODE" = "true" ]; then
 
     if [ -n "$OFFLINE_ARCHIVE" ]; then
         echo -e "${GREEN}✓ Found offline archive: $(basename "$OFFLINE_ARCHIVE")${NC}"
-        
+
         # Check if already extracted
         if [ -d "$SCRIPT_DIR/offline_resources" ]; then
             echo -e "${GREEN}✓ Offline resources already extracted, skipping extraction${NC}"
         else
             echo -e "${YELLOW}Extracting offline resources...${NC}"
-            # Extract archive
-            tar -xzf "$OFFLINE_ARCHIVE" -C "$SCRIPT_DIR"
+            # Extract archive to parent directory (archive contains full LME directory)
+            tar -xzf "$OFFLINE_ARCHIVE" -C "$(dirname "$SCRIPT_DIR")"
+
+            # The archive contains the LME directory with offline_resources inside it
+            # If we're running from a different LME directory, we need to copy the offline_resources
+            EXTRACTED_LME_DIR=$(tar -tzf "$OFFLINE_ARCHIVE" | head -1 | cut -d'/' -f1)
+            if [ "$EXTRACTED_LME_DIR" != "$(basename "$SCRIPT_DIR")" ]; then
+                echo -e "${YELLOW}Copying offline resources from extracted archive...${NC}"
+                cp -r "$(dirname "$SCRIPT_DIR")/$EXTRACTED_LME_DIR/offline_resources" "$SCRIPT_DIR/"
+            fi
         fi
 
         # Install packages

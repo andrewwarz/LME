@@ -107,8 +107,10 @@ Use the automated offline preparation script to download all required resources:
 The script automatically downloads:
 - Container images
 - Agent installers (Wazuh and Elastic agents)
+- CVE database for offline vulnerability detection
 - System packages
 - Creates installation scripts and documentation
+- Includes complete LME source code in the archive
 
 ### Manual Preparation (Alternative)
 
