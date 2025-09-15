@@ -537,6 +537,18 @@ if [ "$OFFLINE_MODE" = "true" ]; then
             exit 1
         fi
 
+        # Setup CVE database for offline Wazuh vulnerability detection
+        echo -e "${YELLOW}Setting up CVE database for offline vulnerability detection...${NC}"
+        if [ -f "$SCRIPT_DIR/offline_resources/cve/cves.zip" ]; then
+            sudo mkdir -p /opt/lme/cve
+            sudo cp "$SCRIPT_DIR/offline_resources/cve/cves.zip" /opt/lme/cve/
+            sudo chown root:root /opt/lme/cve/cves.zip
+            sudo chmod 644 /opt/lme/cve/cves.zip
+            echo -e "${GREEN}✓ CVE database copied to /opt/lme/cve/cves.zip${NC}"
+        else
+            echo -e "${YELLOW}⚠ CVE database not found in offline resources, skipping${NC}"
+        fi
+
         # Create offline mode marker files
         echo -e "${YELLOW}Creating offline mode marker files...${NC}"
         sudo mkdir -p /opt/lme

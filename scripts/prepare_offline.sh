@@ -34,6 +34,7 @@ usage() {
     echo "This script prepares resources for offline LME installation by:"
     echo "- Downloading and saving container images"
     echo "- Downloading agent installers (Wazuh and Elastic agents)"
+    echo "- Downloading CVE database for offline vulnerability detection"
     echo "- Creating a package list for manual download"
     echo "- Generating offline installation instructions"
     echo "- Creating a single archive with all resources"
@@ -95,6 +96,7 @@ create_output_dir() {
     mkdir -p "$OUTPUT_DIR/container_images"
     mkdir -p "$OUTPUT_DIR/packages"
     mkdir -p "$OUTPUT_DIR/agents"
+    mkdir -p "$OUTPUT_DIR/cve"
     mkdir -p "$OUTPUT_DIR/docs"
 }
 
@@ -578,6 +580,45 @@ download_agents() {
     echo -e "${GREEN}✓ Agent installers downloaded${NC}"
 }
 
+# Download CVE database for offline Wazuh vulnerability detection
+download_cve_database() {
+    echo -e "${YELLOW}Downloading CVE database for offline Wazuh vulnerability detection...${NC}"
+
+    # Create cve directory
+    mkdir -p "$OUTPUT_DIR/cve"
+    cd "$OUTPUT_DIR/cve"
+
+    # Get the latest CVE database snapshot link
+    echo -e "${YELLOW}  Getting latest CVE database snapshot link...${NC}"
+    if CVE_INFO=$(curl -s -X GET "https://cti.wazuh.com/api/v1/catalog/contexts/vd_1.0.0/consumers/vd_4.8.0" | jq -r '.data | "\(.last_snapshot_link)\n\(.last_snapshot_at)"'); then
+        CVE_LINK=$(echo "$CVE_INFO" | head -1)
+        CVE_DATE=$(echo "$CVE_INFO" | tail -1)
+
+        echo -e "${GREEN}  ✓ Found CVE database snapshot from: $CVE_DATE${NC}"
+        echo -e "${YELLOW}  Downloading CVE database...${NC}"
+
+        # Download the CVE database
+        if curl -L "$CVE_LINK" -o cves.zip; then
+            echo -e "${GREEN}  ✓ CVE database downloaded successfully${NC}"
+
+            # Verify the download
+            if [ -f "cves.zip" ] && [ -s "cves.zip" ]; then
+                FILE_SIZE=$(du -h cves.zip | cut -f1)
+                echo -e "${GREEN}  ✓ CVE database size: $FILE_SIZE${NC}"
+            else
+                echo -e "${RED}  ✗ Downloaded CVE database appears to be empty${NC}"
+            fi
+        else
+            echo -e "${RED}  ✗ Failed to download CVE database${NC}"
+        fi
+    else
+        echo -e "${RED}  ✗ Failed to get CVE database snapshot information${NC}"
+    fi
+
+    cd "$LME_ROOT"
+    echo -e "${GREEN}✓ CVE database download completed${NC}"
+}
+
 # Create single archive with all offline resources
 create_offline_archive() {
     echo -e "${YELLOW}Creating single offline installation archive...${NC}"
@@ -711,6 +752,7 @@ Directory Structure:
 - container_images/     : Container image tar files
 - packages/            : Package lists and installation scripts
 - agents/              : Agent installers (Wazuh and Elastic agents)
+- cve/                 : CVE database for offline Wazuh vulnerability detection
 - docs/               : Documentation
 - load_containers.sh  : Script to load container images
 
@@ -778,6 +820,7 @@ main() {
     download_containers
     download_packages
     download_agents
+    download_cve_database
     generate_load_script
     generate_instructions
     create_offline_archive
