@@ -574,48 +574,8 @@ download_agents() {
         echo -e "${RED}  ✗ Failed to download Elastic Agent Linux TAR.GZ${NC}"
     fi
 
-    # Create agent installation instructions
-    cat > "$OUTPUT_DIR/agents/AGENT_INSTALLATION_INSTRUCTIONS.txt" << EOF
-Agent Installation Instructions
-==============================
-
-This directory contains agent installers for both Wazuh and Elastic agents.
-
-Downloaded Agents:
-- Wazuh Agent ${WAZUH_VERSION}:
-  * Windows: wazuh-agent-${WAZUH_VERSION}-1.msi
-  * Linux DEB: wazuh-agent_${WAZUH_VERSION}-1_amd64.deb
-  * Linux RPM: wazuh-agent-${WAZUH_VERSION}-1.x86_64.rpm
-
-- Elastic Agent ${STACK_VERSION}:
-  * Windows: elastic-agent-${STACK_VERSION}-windows-x86_64.zip
-  * Linux DEB: elastic-agent-${STACK_VERSION}-amd64.deb
-  * Linux RPM: elastic-agent-${STACK_VERSION}-x86_64.rpm
-  * Linux TAR.GZ: elastic-agent-${STACK_VERSION}-linux-x86_64.tar.gz
-
-Installation Notes:
-==================
-
-Wazuh Agent Installation:
-- Windows: Run the MSI installer as administrator
-- Linux DEB: sudo dpkg -i wazuh-agent_${WAZUH_VERSION}-1_amd64.deb
-- Linux RPM: sudo rpm -ivh wazuh-agent-${WAZUH_VERSION}-1.x86_64.rpm
-
-Elastic Agent Installation:
-- Windows: Extract ZIP and run elastic-agent.exe install
-- Linux DEB: sudo dpkg -i elastic-agent-${STACK_VERSION}-amd64.deb
-- Linux RPM: sudo rpm -ivh elastic-agent-${STACK_VERSION}-x86_64.rpm
-- Linux TAR.GZ: Extract and run ./elastic-agent install
-
-Configuration:
-- Agents will need to be configured to connect to your LME server
-- Refer to the main LME documentation for agent configuration details
-- In offline environments, ensure agents can reach the LME server IP/hostname
-
-EOF
-
     cd "$LME_ROOT"
-    echo -e "${GREEN}✓ Agent installers downloaded and instructions created${NC}"
+    echo -e "${GREEN}✓ Agent installers downloaded${NC}"
 }
 
 # Create single archive with all offline resources
@@ -775,7 +735,6 @@ Steps for Offline Installation:
 
 6. Install agents on endpoint systems:
    - Agent installers are available in the agents/ directory
-   - See agents/AGENT_INSTALLATION_INSTRUCTIONS.txt for detailed instructions
    - Configure agents to connect to your LME server IP/hostname
 
 CRITICAL NOTES:
