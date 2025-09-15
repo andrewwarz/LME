@@ -624,7 +624,8 @@ create_offline_archive() {
     echo -e "${YELLOW}Creating single offline installation archive...${NC}"
 
     ARCHIVE_NAME="lme-offline-$(date +%Y%m%d-%H%M%S).tar.gz"
-    ARCHIVE_PATH="$LME_ROOT/$ARCHIVE_NAME"
+    # Create archive in parent directory to avoid including it in itself
+    ARCHIVE_PATH="$(dirname "$LME_ROOT")/$ARCHIVE_NAME"
 
     echo -e "${YELLOW}Creating compressed archive: $ARCHIVE_PATH${NC}"
     cd "$(dirname "$LME_ROOT")"
@@ -644,6 +645,7 @@ create_offline_archive() {
     fi
 
     echo -e "${GREEN}✓ Single offline archive created: $ARCHIVE_NAME${NC}"
+    echo -e "${YELLOW}Archive location: $ARCHIVE_PATH${NC}"
     echo -e "${YELLOW}Transfer this file to your target system and extract it for offline installation.${NC}"
 }
 
