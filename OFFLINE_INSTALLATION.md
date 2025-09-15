@@ -93,7 +93,28 @@ ansible-playbook ansible/upgrade_lme.yml --extra-vars '{"offline_mode": true}'
 
 ## Preparing for Offline Installation
 
-### Step 1: Prepare Source System (with Internet)
+### Automated Preparation (Recommended)
+
+Use the automated offline preparation script to download all required resources:
+
+```bash
+# Run the offline preparation script
+./scripts/prepare_offline.sh
+
+# This will create a complete offline archive: lme-offline-YYYYMMDD-HHMMSS.tar.gz
+```
+
+The script automatically downloads:
+- Container images
+- Agent installers (Wazuh and Elastic agents)
+- System packages
+- Creates installation scripts and documentation
+
+### Manual Preparation (Alternative)
+
+If you prefer manual preparation:
+
+#### Step 1: Prepare Source System (with Internet)
 
 1. **Download container images**:
 ```bash
@@ -112,17 +133,32 @@ podman save -o wazuh-manager.tar docker.io/wazuh/wazuh-manager:4.9.1
 podman save -o elastalert2.tar docker.io/jertel/elastalert2:2.20.0
 ```
 
-2. **Download system packages** (create local repository or download .deb files)
+2. **Download agent installers**:
+```bash
+# Download Wazuh 4.9.1 agents
+wget https://packages.wazuh.com/4.x/windows/wazuh-agent-4.9.1-1.msi
+wget https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_4.9.1-1_amd64.deb
+wget https://packages.wazuh.com/4.x/yum/wazuh-agent-4.9.1-1.x86_64.rpm
 
-3. **Prepare Nix packages** (if using Nix-based installation)
+# Download Elastic Agent 8.18.0
+wget https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-8.18.0-windows-x86_64.zip
+wget https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-8.18.0-amd64.deb
+wget https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-8.18.0-x86_64.rpm
+wget https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-8.18.0-linux-x86_64.tar.gz
+```
 
-### Step 2: Transfer to Target System
+3. **Download system packages** (create local repository or download .deb files)
+
+4. **Prepare Nix packages** (if using Nix-based installation)
+
+#### Step 2: Transfer to Target System
 
 1. Copy all saved container images to the target system
 2. Copy LME source code
 3. Copy any downloaded packages
+4. Copy agent installers
 
-### Step 3: Load Resources on Target System
+#### Step 3: Load Resources on Target System
 
 1. **Load container images**:
 ```bash
@@ -136,6 +172,80 @@ podman load -i elastalert2.tar
 2. **Install system packages** (if not already installed)
 
 3. **Verify all prerequisites are met**
+
+## Agent Installation
+
+After successfully installing LME in offline mode, you'll need to install and configure agents on your endpoint systems.
+
+### Using Automated Offline Archive
+
+If you used the `prepare_offline.sh` script, agent installers are included in the `agents/` directory:
+
+```bash
+# Extract the offline archive (if not already done)
+tar -xzf lme-offline-*.tar.gz
+
+# Agent installers are in offline_resources/agents/
+ls offline_resources/agents/
+```
+
+### Agent Installation Instructions
+
+#### Wazuh Agent Installation
+
+**Windows:**
+```cmd
+# Run as Administrator
+msiexec /i wazuh-agent-4.9.1-1.msi /quiet
+```
+
+**Linux (DEB-based systems):**
+```bash
+sudo dpkg -i wazuh-agent_4.9.1-1_amd64.deb
+```
+
+**Linux (RPM-based systems):**
+```bash
+sudo rpm -ivh wazuh-agent-4.9.1-1.x86_64.rpm
+```
+
+#### Elastic Agent Installation
+
+**Windows:**
+```cmd
+# Extract the ZIP file and run as Administrator
+Expand-Archive -Path elastic-agent-8.18.0-windows-x86_64.zip
+cd elastic-agent-8.18.0-windows-x86_64
+.\elastic-agent.exe install
+```
+
+**Linux (DEB-based systems):**
+```bash
+sudo dpkg -i elastic-agent-8.18.0-amd64.deb
+```
+
+**Linux (RPM-based systems):**
+```bash
+sudo rpm -ivh elastic-agent-8.18.0-x86_64.rpm
+```
+
+**Linux (TAR.GZ):**
+```bash
+tar -xzf elastic-agent-8.18.0-linux-x86_64.tar.gz
+cd elastic-agent-8.18.0-linux-x86_64
+sudo ./elastic-agent install
+```
+
+### Agent Configuration
+
+After installation, configure agents to connect to your LME server:
+
+1. **Update agent configuration** to point to your LME server IP/hostname
+2. **Ensure network connectivity** between agents and LME server
+3. **Verify agent enrollment** in the LME dashboard
+4. **Test log collection** to confirm proper operation
+
+For detailed agent configuration instructions, refer to the main LME documentation.
 
 ## Security Considerations
 

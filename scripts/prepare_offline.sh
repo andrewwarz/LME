@@ -14,12 +14,26 @@ LME_ROOT="$(dirname "$SCRIPT_DIR")"
 CONTAINERS_FILE="$LME_ROOT/config/containers.txt"
 OUTPUT_DIR="$LME_ROOT/offline_resources"
 
+# Load environment variables from example.env if it exists
+ENV_FILE="$LME_ROOT/config/example.env"
+if [ -f "$ENV_FILE" ]; then
+    # Source the env file, filtering out comments and empty lines
+    set -a  # automatically export all variables
+    source <(grep -v '^#' "$ENV_FILE" | grep -v '^$')
+    set +a  # stop automatically exporting
+fi
+
+# Set default versions if not found in env file
+STACK_VERSION=${STACK_VERSION:-"8.18.0"}
+WAZUH_VERSION=${WAZUH_VERSION:-"4.9.1"}
+
 # Print usage information
 usage() {
     echo "Usage: $0 [OPTIONS]"
     echo
     echo "This script prepares resources for offline LME installation by:"
     echo "- Downloading and saving container images"
+    echo "- Downloading agent installers (Wazuh and Elastic agents)"
     echo "- Creating a package list for manual download"
     echo "- Generating offline installation instructions"
     echo "- Creating a single archive with all resources"
@@ -80,6 +94,7 @@ create_output_dir() {
     echo -e "${YELLOW}Creating output directory: $OUTPUT_DIR${NC}"
     mkdir -p "$OUTPUT_DIR/container_images"
     mkdir -p "$OUTPUT_DIR/packages"
+    mkdir -p "$OUTPUT_DIR/agents"
     mkdir -p "$OUTPUT_DIR/docs"
 }
 
@@ -486,6 +501,123 @@ EOF
     echo -e "${GREEN}✓ Packages downloaded and scripts created${NC}"
 }
 
+# Download agent installers for offline installation
+download_agents() {
+    echo -e "${YELLOW}Downloading agent installers for offline installation...${NC}"
+
+    # Create agents directory
+    mkdir -p "$OUTPUT_DIR/agents"
+    cd "$OUTPUT_DIR/agents"
+
+    echo -e "${YELLOW}Using Elastic Stack version: $STACK_VERSION${NC}"
+    echo -e "${YELLOW}Using Wazuh version: $WAZUH_VERSION${NC}"
+
+    # Download Wazuh agents
+    echo -e "${YELLOW}Downloading Wazuh $WAZUH_VERSION agents...${NC}"
+
+    # Wazuh Windows agent
+    echo -e "${YELLOW}  Downloading Wazuh Windows agent...${NC}"
+    if wget -q --show-progress "https://packages.wazuh.com/4.x/windows/wazuh-agent-${WAZUH_VERSION}-1.msi"; then
+        echo -e "${GREEN}  ✓ Wazuh Windows agent downloaded${NC}"
+    else
+        echo -e "${RED}  ✗ Failed to download Wazuh Windows agent${NC}"
+    fi
+
+    # Wazuh Linux DEB agent
+    echo -e "${YELLOW}  Downloading Wazuh Linux DEB agent...${NC}"
+    if wget -q --show-progress "https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_${WAZUH_VERSION}-1_amd64.deb"; then
+        echo -e "${GREEN}  ✓ Wazuh Linux DEB agent downloaded${NC}"
+    else
+        echo -e "${RED}  ✗ Failed to download Wazuh Linux DEB agent${NC}"
+    fi
+
+    # Wazuh Linux RPM agent
+    echo -e "${YELLOW}  Downloading Wazuh Linux RPM agent...${NC}"
+    if wget -q --show-progress "https://packages.wazuh.com/4.x/yum/wazuh-agent-${WAZUH_VERSION}-1.x86_64.rpm"; then
+        echo -e "${GREEN}  ✓ Wazuh Linux RPM agent downloaded${NC}"
+    else
+        echo -e "${RED}  ✗ Failed to download Wazuh Linux RPM agent${NC}"
+    fi
+
+    # Download Elastic agents
+    echo -e "${YELLOW}Downloading Elastic Agent $STACK_VERSION...${NC}"
+
+    # Elastic Agent Windows
+    echo -e "${YELLOW}  Downloading Elastic Agent Windows...${NC}"
+    if wget -q --show-progress "https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-${STACK_VERSION}-windows-x86_64.zip"; then
+        echo -e "${GREEN}  ✓ Elastic Agent Windows downloaded${NC}"
+    else
+        echo -e "${RED}  ✗ Failed to download Elastic Agent Windows${NC}"
+    fi
+
+    # Elastic Agent Linux DEB
+    echo -e "${YELLOW}  Downloading Elastic Agent Linux DEB...${NC}"
+    if wget -q --show-progress "https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-${STACK_VERSION}-amd64.deb"; then
+        echo -e "${GREEN}  ✓ Elastic Agent Linux DEB downloaded${NC}"
+    else
+        echo -e "${RED}  ✗ Failed to download Elastic Agent Linux DEB${NC}"
+    fi
+
+    # Elastic Agent Linux RPM
+    echo -e "${YELLOW}  Downloading Elastic Agent Linux RPM...${NC}"
+    if wget -q --show-progress "https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-${STACK_VERSION}-x86_64.rpm"; then
+        echo -e "${GREEN}  ✓ Elastic Agent Linux RPM downloaded${NC}"
+    else
+        echo -e "${RED}  ✗ Failed to download Elastic Agent Linux RPM${NC}"
+    fi
+
+    # Elastic Agent Linux TAR.GZ
+    echo -e "${YELLOW}  Downloading Elastic Agent Linux TAR.GZ...${NC}"
+    if wget -q --show-progress "https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-${STACK_VERSION}-linux-x86_64.tar.gz"; then
+        echo -e "${GREEN}  ✓ Elastic Agent Linux TAR.GZ downloaded${NC}"
+    else
+        echo -e "${RED}  ✗ Failed to download Elastic Agent Linux TAR.GZ${NC}"
+    fi
+
+    # Create agent installation instructions
+    cat > "$OUTPUT_DIR/agents/AGENT_INSTALLATION_INSTRUCTIONS.txt" << EOF
+Agent Installation Instructions
+==============================
+
+This directory contains agent installers for both Wazuh and Elastic agents.
+
+Downloaded Agents:
+- Wazuh Agent ${WAZUH_VERSION}:
+  * Windows: wazuh-agent-${WAZUH_VERSION}-1.msi
+  * Linux DEB: wazuh-agent_${WAZUH_VERSION}-1_amd64.deb
+  * Linux RPM: wazuh-agent-${WAZUH_VERSION}-1.x86_64.rpm
+
+- Elastic Agent ${STACK_VERSION}:
+  * Windows: elastic-agent-${STACK_VERSION}-windows-x86_64.zip
+  * Linux DEB: elastic-agent-${STACK_VERSION}-amd64.deb
+  * Linux RPM: elastic-agent-${STACK_VERSION}-x86_64.rpm
+  * Linux TAR.GZ: elastic-agent-${STACK_VERSION}-linux-x86_64.tar.gz
+
+Installation Notes:
+==================
+
+Wazuh Agent Installation:
+- Windows: Run the MSI installer as administrator
+- Linux DEB: sudo dpkg -i wazuh-agent_${WAZUH_VERSION}-1_amd64.deb
+- Linux RPM: sudo rpm -ivh wazuh-agent-${WAZUH_VERSION}-1.x86_64.rpm
+
+Elastic Agent Installation:
+- Windows: Extract ZIP and run elastic-agent.exe install
+- Linux DEB: sudo dpkg -i elastic-agent-${STACK_VERSION}-amd64.deb
+- Linux RPM: sudo rpm -ivh elastic-agent-${STACK_VERSION}-x86_64.rpm
+- Linux TAR.GZ: Extract and run ./elastic-agent install
+
+Configuration:
+- Agents will need to be configured to connect to your LME server
+- Refer to the main LME documentation for agent configuration details
+- In offline environments, ensure agents can reach the LME server IP/hostname
+
+EOF
+
+    cd "$LME_ROOT"
+    echo -e "${GREEN}✓ Agent installers downloaded and instructions created${NC}"
+}
+
 # Create single archive with all offline resources
 create_offline_archive() {
     echo -e "${YELLOW}Creating single offline installation archive...${NC}"
@@ -618,6 +750,7 @@ This directory contains all resources needed for offline LME installation.
 Directory Structure:
 - container_images/     : Container image tar files
 - packages/            : Package lists and installation scripts
+- agents/              : Agent installers (Wazuh and Elastic agents)
 - docs/               : Documentation
 - load_containers.sh  : Script to load container images
 
@@ -639,6 +772,11 @@ Steps for Offline Installation:
 
 5. Run LME installation in offline mode:
    ./install.sh --offline
+
+6. Install agents on endpoint systems:
+   - Agent installers are available in the agents/ directory
+   - See agents/AGENT_INSTALLATION_INSTRUCTIONS.txt for detailed instructions
+   - Configure agents to connect to your LME server IP/hostname
 
 CRITICAL NOTES:
 ===============
@@ -680,6 +818,7 @@ main() {
     create_output_dir
     download_containers
     download_packages
+    download_agents
     generate_load_script
     generate_instructions
     create_offline_archive
