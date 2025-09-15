@@ -545,6 +545,45 @@ if [ "$OFFLINE_MODE" = "true" ]; then
             sudo chown root:root /opt/lme/cve/cves.zip
             sudo chmod 644 /opt/lme/cve/cves.zip
             echo -e "${GREEN}✓ CVE database copied to /opt/lme/cve/cves.zip${NC}"
+
+            # Configure Wazuh to use offline CVE database
+            echo -e "${YELLOW}Configuring Wazuh for offline CVE database...${NC}"
+            if [ -f "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf" ]; then
+                # Create backup
+                sudo cp "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf" "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf.backup.$(date +%Y%m%d-%H%M%S)"
+
+                # Add offline-url to vulnerability-detection section if not already present
+                if ! grep -q "offline-url" "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf"; then
+                    # Use awk to insert the offline-url line after feed-update-interval
+                    awk '/feed-update-interval>60m<\/feed-update-interval>/ { print; print "     <offline-url>/opt/lme/cve/cves.zip</offline-url>"; next } 1' "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf" > /tmp/wazuh_manager_temp.conf
+                    sudo mv /tmp/wazuh_manager_temp.conf "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf"
+                    echo -e "${GREEN}✓ Wazuh configuration updated for offline CVE database${NC}"
+                else
+                    echo -e "${GREEN}✓ Wazuh configuration already contains offline CVE database setting${NC}"
+                fi
+            else
+                echo -e "${RED}✗ Wazuh configuration file not found${NC}"
+            fi
+
+            # Add CVE database volume mount to Wazuh container
+            echo -e "${YELLOW}Adding CVE database volume mount to Wazuh container...${NC}"
+            WAZUH_CONTAINER_FILE="$SCRIPT_DIR/quadlet/lme-wazuh-manager.container"
+            if [ -f "$WAZUH_CONTAINER_FILE" ]; then
+                # Create backup
+                sudo cp "$WAZUH_CONTAINER_FILE" "$WAZUH_CONTAINER_FILE.backup.$(date +%Y%m%d-%H%M%S)"
+
+                # Add CVE volume mount if not already present
+                if ! grep -q "Volume=/opt/lme/cve" "$WAZUH_CONTAINER_FILE"; then
+                    # Use awk to insert the CVE volume mount after the ca-certificates line
+                    awk '/Volume=.*ca-certificates.crt:ro/ { print; print "Volume=/opt/lme/cve:/opt/lme/cve:ro"; next } 1' "$WAZUH_CONTAINER_FILE" > /tmp/wazuh_container_temp.conf
+                    sudo mv /tmp/wazuh_container_temp.conf "$WAZUH_CONTAINER_FILE"
+                    echo -e "${GREEN}✓ CVE database volume mount added to Wazuh container${NC}"
+                else
+                    echo -e "${GREEN}✓ CVE database volume mount already present in Wazuh container${NC}"
+                fi
+            else
+                echo -e "${RED}✗ Wazuh container file not found${NC}"
+            fi
         else
             echo -e "${YELLOW}⚠ CVE database not found in offline resources, skipping${NC}"
         fi
