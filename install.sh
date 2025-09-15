@@ -555,7 +555,7 @@ if [ "$OFFLINE_MODE" = "true" ]; then
                 # Add offline-url to vulnerability-detection section if not already present
                 if ! grep -q "offline-url" "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf"; then
                     # Use awk to insert the offline-url line after feed-update-interval
-                    awk '/feed-update-interval>60m<\/feed-update-interval>/ { print; print "     <offline-url>/opt/lme/cve/cves.zip</offline-url>"; next } 1' "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf" > /tmp/wazuh_manager_temp.conf
+                    awk '/feed-update-interval>60m<\/feed-update-interval>/ { print; print "     <offline-url>file:///opt/lme/cve/cves.zip</offline-url>"; next } 1' "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf" > /tmp/wazuh_manager_temp.conf
                     sudo mv /tmp/wazuh_manager_temp.conf "$SCRIPT_DIR/config/wazuh_cluster/wazuh_manager.conf"
                     echo -e "${GREEN}✓ Wazuh configuration updated for offline CVE database${NC}"
                 else
