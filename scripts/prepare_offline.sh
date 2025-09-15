@@ -772,8 +772,8 @@ Steps for Offline Installation:
 2. Extract the archive:
    tar -xzf lme-offline-*.tar.gz
 
-3. Navigate to the LME directory:
-   cd LME  # (or whatever the extracted directory is named)
+3. Navigate to the extracted LME directory:
+   cd LME
 
 4. Install required system packages:
    cd offline_resources/packages/
