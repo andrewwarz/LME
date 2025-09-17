@@ -619,34 +619,53 @@ download_cve_database() {
     echo -e "${GREEN}✓ CVE database download completed${NC}"
 }
 
-# Create single archive with all offline resources
-create_offline_archive() {
-    echo -e "${YELLOW}Creating single offline installation archive...${NC}"
+# Create separate archives for main installation and agents
+create_offline_archives() {
+    echo -e "${YELLOW}Creating offline installation archives...${NC}"
 
-    ARCHIVE_NAME="lme-offline-$(date +%Y%m%d-%H%M%S).tar.gz"
-    # Create archive in parent directory to avoid including it in itself
-    ARCHIVE_PATH="$(dirname "$LME_ROOT")/$ARCHIVE_NAME"
+    TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+    MAIN_ARCHIVE_NAME="lme-offline-$TIMESTAMP.tar.gz"
+    AGENTS_ARCHIVE_NAME="lme-agents-$TIMESTAMP.tar.gz"
 
-    echo -e "${YELLOW}Creating compressed archive: $ARCHIVE_PATH${NC}"
+    # Create archives in parent directory to avoid including them in themselves
+    MAIN_ARCHIVE_PATH="$(dirname "$LME_ROOT")/$MAIN_ARCHIVE_NAME"
+    AGENTS_ARCHIVE_PATH="$(dirname "$LME_ROOT")/$AGENTS_ARCHIVE_NAME"
+
     cd "$(dirname "$LME_ROOT")"
-
-    # Include the entire LME directory (which now contains offline_resources)
     LME_DIR_NAME="$(basename "$LME_ROOT")"
 
-    if tar -czf "$ARCHIVE_PATH" "$LME_DIR_NAME"; then
-        echo -e "${GREEN}✓ Archive created successfully: $ARCHIVE_PATH${NC}"
-
-        # Get archive size
-        ARCHIVE_SIZE=$(du -h "$ARCHIVE_PATH" | cut -f1)
-        echo -e "${GREEN}Archive size: $ARCHIVE_SIZE${NC}"
+    # Create main archive excluding agents directory
+    echo -e "${YELLOW}Creating main archive (excluding agents): $MAIN_ARCHIVE_PATH${NC}"
+    if tar -czf "$MAIN_ARCHIVE_PATH" --exclude="$LME_DIR_NAME/offline_resources/agents" "$LME_DIR_NAME"; then
+        echo -e "${GREEN}✓ Main archive created successfully${NC}"
+        MAIN_SIZE=$(du -h "$MAIN_ARCHIVE_PATH" | cut -f1)
+        echo -e "${GREEN}Main archive size: $MAIN_SIZE${NC}"
     else
-        echo -e "${RED}✗ Failed to create archive${NC}"
+        echo -e "${RED}✗ Failed to create main archive${NC}"
         exit 1
     fi
 
-    echo -e "${GREEN}✓ Single offline archive created: $ARCHIVE_NAME${NC}"
-    echo -e "${YELLOW}Archive location: $ARCHIVE_PATH${NC}"
-    echo -e "${YELLOW}Transfer this file to your target system and extract it for offline installation.${NC}"
+    # Create agents archive if agents directory exists
+    if [ -d "$LME_ROOT/offline_resources/agents" ]; then
+        echo -e "${YELLOW}Creating agents archive: $AGENTS_ARCHIVE_PATH${NC}"
+        if tar -czf "$AGENTS_ARCHIVE_PATH" -C "$LME_ROOT/offline_resources" agents; then
+            echo -e "${GREEN}✓ Agents archive created successfully${NC}"
+            AGENTS_SIZE=$(du -h "$AGENTS_ARCHIVE_PATH" | cut -f1)
+            echo -e "${GREEN}Agents archive size: $AGENTS_SIZE${NC}"
+        else
+            echo -e "${RED}✗ Failed to create agents archive${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}No agents directory found, skipping agents archive${NC}"
+    fi
+
+    echo -e "${GREEN}✓ Offline archives created successfully:${NC}"
+    echo -e "${GREEN}  Main: $MAIN_ARCHIVE_NAME${NC}"
+    if [ -f "$AGENTS_ARCHIVE_PATH" ]; then
+        echo -e "${GREEN}  Agents: $AGENTS_ARCHIVE_NAME${NC}"
+    fi
+    echo -e "${YELLOW}Transfer both files to your target system for offline installation.${NC}"
 }
 
 # Generate load script for target system
@@ -752,24 +771,28 @@ generate_instructions() {
 LME Offline Installation Instructions
 ====================================
 
-This archive contains the complete LME source code and all resources needed for offline installation.
+This archive contains the complete LME source code and core resources needed for offline installation.
 
-Archive Contents:
+Main Archive Contents (lme-offline-*.tar.gz):
 - LME source code (complete repository)
 - offline_resources/ directory containing:
   - container_images/     : Container image tar files
   - packages/            : Package lists and installation scripts
-  - agents/              : Agent installers (Wazuh and Elastic agents)
   - cve/                 : CVE database for offline Wazuh vulnerability detection
   - docs/               : Documentation
   - load_containers.sh  : Script to load container images
 
+Agents Archive (lme-agents-*.tar.gz):
+- agents/              : Agent installers (Wazuh and Elastic agents for all platforms)
+
 Steps for Offline Installation:
 ==============================
 
-1. Transfer the lme-offline-*.tar.gz file to the target system
+1. Transfer BOTH archive files to the target system:
+   - lme-offline-*.tar.gz (main installation)
+   - lme-agents-*.tar.gz (agent installers)
 
-2. Extract the archive:
+2. Extract the main archive:
    tar -xzf lme-offline-*.tar.gz
 
 3. Navigate to the extracted LME directory and run installation:
@@ -783,8 +806,12 @@ Steps for Offline Installation:
    - Set up CVE database for offline vulnerability detection
 
 4. Install agents on endpoint systems:
-   - Agent installers are available in the offline_resources/agents/ directory
-   - Configure agents to connect to your LME server IP/hostname
+   a) Extract the agents archive:
+      tar -xzf lme-agents-*.tar.gz
+
+   b) Agent installers are now available in the agents/ directory
+
+   c) Configure agents to connect to your LME server IP/hostname
 
 CRITICAL NOTES:
 ===============
@@ -830,16 +857,19 @@ main() {
     download_cve_database
     generate_load_script
     generate_instructions
-    create_offline_archive
+    create_offline_archives
 
     echo -e "${GREEN}✓ Offline preparation complete!${NC}"
-    echo -e "${YELLOW}Resources saved to archive: lme-offline-*.tar.gz${NC}"
+    echo -e "${YELLOW}Resources saved to archives:${NC}"
+    echo -e "${YELLOW}  - lme-offline-*.tar.gz (main installation)${NC}"
+    echo -e "${YELLOW}  - lme-agents-*.tar.gz (agent installers)${NC}"
     echo
     echo -e "${YELLOW}Next steps:${NC}"
-    echo "1. Transfer the lme-offline-*.tar.gz file to your target system"
-    echo "2. Extract: tar -xzf lme-offline-*.tar.gz"
+    echo "1. Transfer BOTH archive files to your target system"
+    echo "2. Extract main archive: tar -xzf lme-offline-*.tar.gz"
     echo "3. Navigate to extracted directory: cd LME"
     echo "4. Run installation: ./install.sh --offline"
+    echo "5. Extract agents archive separately when needed: tar -xzf lme-agents-*.tar.gz"
     echo ""
     echo "The install script will automatically handle packages, containers, and configuration."
     echo
