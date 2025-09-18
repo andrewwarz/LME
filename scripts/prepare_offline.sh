@@ -995,25 +995,17 @@ Steps for Offline Installation:
 2. Extract the archive:
    tar -xzf lme-offline-*.tar.gz
 
-3. Navigate to the LME directory:
-   cd LME  # (or whatever the extracted directory is named)
-
-4. Install required system packages:
-   cd offline_resources/packages/
-   sudo ./install_packages_offline.sh
-
-5. Load container images:
-   cd ../
-   ./load_containers.sh
-
-6. Verify images are loaded:
-   sudo podman images
-
-7. Run LME installation in offline mode:
-   cd ../
+3. Navigate to the extracted LME directory and run installation:
+   cd LME
    ./install.sh --offline
 
-8. Install agents on endpoint systems:
+   The install script will automatically:
+   - Install required system packages
+   - Load container images
+   - Configure and start LME services
+   - Set up CVE database for offline vulnerability detection
+
+4. Install agents on endpoint systems:
    - Agent installers are available in the offline_resources/agents/ directory
    - Configure agents to connect to your LME server IP/hostname
 
@@ -1065,19 +1057,16 @@ main() {
     download_cve_database
     generate_load_script
     generate_instructions
-    create_offline_archives
+    create_offline_archive
 
     echo -e "${GREEN}✓ Offline preparation complete!${NC}"
-    echo -e "${YELLOW}Resources saved to archives:${NC}"
-    echo -e "${YELLOW}  - lme-offline-*.tar.gz (main installation)${NC}"
-    echo -e "${YELLOW}  - lme-agents-*.tar.gz (agent installers)${NC}"
+    echo -e "${YELLOW}Resources saved to archive: lme-offline-*.tar.gz${NC}"
     echo
     echo -e "${YELLOW}Next steps:${NC}"
-    echo "1. Transfer BOTH archive files to your target system"
-    echo "2. Extract main archive: tar -xzf lme-offline-*.tar.gz"
+    echo "1. Transfer the lme-offline-*.tar.gz file to your target system"
+    echo "2. Extract: tar -xzf lme-offline-*.tar.gz"
     echo "3. Navigate to extracted directory: cd LME"
     echo "4. Run installation: ./install.sh --offline"
-    echo "5. Extract agents archive separately when needed: tar -xzf lme-agents-*.tar.gz"
     echo ""
     echo "The install script will automatically handle packages, containers, and configuration."
 
