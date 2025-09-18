@@ -144,6 +144,21 @@ install_podman() {
     fi
 }
 
+# Install Nix for package preparation
+install_nix_for_preparation() {
+    echo -e "${YELLOW}Installing Nix for package preparation...${NC}"
+
+    # Download and run the Nix installer
+    curl -L https://nixos.org/nix/install | sh
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ Failed to install Nix${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Nix installation completed${NC}"
+}
+
 # Cleanup temporary podman installation
 cleanup_temp_podman() {
     if [ "$TEMP_PODMAN_INSTALLED" = true ]; then
@@ -172,6 +187,33 @@ cleanup_temp_podman() {
 
         echo -e "${GREEN}✓ Temporary Podman installation cleaned up${NC}"
         echo -e "${YELLOW}Note: LME installation will use Nix-managed Podman${NC}"
+    fi
+
+    # Cleanup temporary Nix installation
+    if [ "$TEMP_NIX_INSTALLED" = true ]; then
+        echo -e "${YELLOW}Cleaning up temporary Nix installation...${NC}"
+
+        # Remove Nix installation
+        if [ -d "/nix" ]; then
+            sudo rm -rf /nix
+        fi
+
+        # Remove Nix profile
+        if [ -d "$HOME/.nix-profile" ]; then
+            rm -rf "$HOME/.nix-profile"
+        fi
+
+        # Remove Nix channels
+        if [ -d "$HOME/.nix-channels" ]; then
+            rm -f "$HOME/.nix-channels"
+        fi
+
+        # Remove Nix defexpr
+        if [ -d "$HOME/.nix-defexpr" ]; then
+            rm -rf "$HOME/.nix-defexpr"
+        fi
+
+        echo -e "${GREEN}✓ Temporary Nix installation cleaned up${NC}"
     fi
 }
 
@@ -286,12 +328,27 @@ download_packages() {
     # Download Nix packages for offline installation
     echo -e "${YELLOW}Preparing Nix packages for offline installation...${NC}"
 
-    # Check if Nix is available on the prepare system
+    # Check if Nix is available on the prepare system and install if needed
     if ! command -v nix-build >/dev/null 2>&1; then
-        echo -e "${RED}✗ Nix is not available on this preparation system${NC}"
-        echo -e "${RED}Cannot prepare podman for offline installation without Nix${NC}"
-        echo -e "${YELLOW}Please install Nix on this system and re-run the prepare script${NC}"
-        exit 1
+        echo -e "${YELLOW}Nix not found, installing automatically for package preparation...${NC}"
+        install_nix_for_preparation
+
+        # Source Nix profile to make commands available
+        if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
+            source "$HOME/.nix-profile/etc/profile.d/nix.sh"
+        fi
+
+        # Check again after installation
+        if ! command -v nix-build >/dev/null 2>&1; then
+            echo -e "${RED}✗ Failed to install Nix${NC}"
+            exit 1
+        fi
+
+        echo -e "${GREEN}✓ Nix installed successfully${NC}"
+        TEMP_NIX_INSTALLED=true
+    else
+        echo -e "${GREEN}✓ Nix is already available${NC}"
+        TEMP_NIX_INSTALLED=false
     fi
 
     # Set up Nix channels if not already configured
@@ -961,6 +1018,10 @@ main() {
     echo -e "${GREEN}==============================${NC}"
     echo
 
+    # Initialize cleanup tracking
+    TEMP_PODMAN_INSTALLED=false
+    TEMP_NIX_INSTALLED=false
+
     check_internet
     check_podman
     create_output_dir
@@ -984,6 +1045,9 @@ main() {
     echo "6. Run LME installation: cd .. && ./install.sh --offline"
     echo
     echo -e "${YELLOW}For detailed instructions, see the extracted docs/OFFLINE_INSTALLATION_INSTRUCTIONS.txt${NC}"
+
+    # Cleanup temporary podman installation
+    cleanup_temp_podman
 }
 
 # Run main function
