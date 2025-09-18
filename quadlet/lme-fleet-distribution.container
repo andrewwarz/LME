@@ -25,7 +25,7 @@ Environment=EPR_ADDRESS=0.0.0.0:8080 EPR_TLS_CERT=/certs/fleet-distribution/flee
 
 
 # Health check to ensure the distribution server is ready
-HealthCmd=CMD-SHELL curl -f http://localhost:8080/health || exit 1
+HealthCmd=CMD-SHELL curl -f --cacert /certs/ca/ca.crt https://localhost:8080/health || exit 1
 HealthInterval=30s
 HealthTimeout=10s
 HealthRetries=3
