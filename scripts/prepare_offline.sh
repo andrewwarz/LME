@@ -793,53 +793,34 @@ download_cve_database() {
     echo -e "${GREEN}✓ CVE database download completed${NC}"
 }
 
-# Create separate archives for main installation and agents
-create_offline_archives() {
-    echo -e "${YELLOW}Creating offline installation archives...${NC}"
+# Create single archive with all offline resources
+create_offline_archive() {
+    echo -e "${YELLOW}Creating offline installation archive...${NC}"
 
-    TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-    MAIN_ARCHIVE_NAME="lme-offline-$TIMESTAMP.tar.gz"
-    AGENTS_ARCHIVE_NAME="lme-agents-$TIMESTAMP.tar.gz"
+    ARCHIVE_NAME="lme-offline-$(date +%Y%m%d-%H%M%S).tar.gz"
+    # Create archive in parent directory to avoid including it in itself
+    ARCHIVE_PATH="$(dirname "$LME_ROOT")/$ARCHIVE_NAME"
 
-    # Create archives in parent directory to avoid including them in themselves
-    MAIN_ARCHIVE_PATH="$(dirname "$LME_ROOT")/$MAIN_ARCHIVE_NAME"
-    AGENTS_ARCHIVE_PATH="$(dirname "$LME_ROOT")/$AGENTS_ARCHIVE_NAME"
-
+    echo -e "${YELLOW}Creating compressed archive: $ARCHIVE_PATH${NC}"
     cd "$(dirname "$LME_ROOT")"
+
+    # Include the entire LME directory (which now contains offline_resources)
     LME_DIR_NAME="$(basename "$LME_ROOT")"
 
-    # Create main archive excluding agents directory
-    echo -e "${YELLOW}Creating main archive (excluding agents): $MAIN_ARCHIVE_PATH${NC}"
-    if tar -czf "$MAIN_ARCHIVE_PATH" --exclude="$LME_DIR_NAME/offline_resources/agents" "$LME_DIR_NAME"; then
-        echo -e "${GREEN}✓ Main archive created successfully${NC}"
-        MAIN_SIZE=$(du -h "$MAIN_ARCHIVE_PATH" | cut -f1)
-        echo -e "${GREEN}Main archive size: $MAIN_SIZE${NC}"
+    if tar -czf "$ARCHIVE_PATH" "$LME_DIR_NAME"; then
+        echo -e "${GREEN}✓ Archive created successfully: $ARCHIVE_PATH${NC}"
+
+        # Get archive size
+        ARCHIVE_SIZE=$(du -h "$ARCHIVE_PATH" | cut -f1)
+        echo -e "${GREEN}Archive size: $ARCHIVE_SIZE${NC}"
     else
-        echo -e "${RED}✗ Failed to create main archive${NC}"
+        echo -e "${RED}✗ Failed to create archive${NC}"
         exit 1
     fi
 
-    # Create agents archive if agents directory exists
-    if [ -d "$LME_ROOT/offline_resources/agents" ]; then
-        echo -e "${YELLOW}Creating agents archive: $AGENTS_ARCHIVE_PATH${NC}"
-        if tar -czf "$AGENTS_ARCHIVE_PATH" -C "$LME_ROOT/offline_resources" agents; then
-            echo -e "${GREEN}✓ Agents archive created successfully${NC}"
-            AGENTS_SIZE=$(du -h "$AGENTS_ARCHIVE_PATH" | cut -f1)
-            echo -e "${GREEN}Agents archive size: $AGENTS_SIZE${NC}"
-        else
-            echo -e "${RED}✗ Failed to create agents archive${NC}"
-            exit 1
-        fi
-    else
-        echo -e "${YELLOW}No agents directory found, skipping agents archive${NC}"
-    fi
-
-    echo -e "${GREEN}✓ Offline archives created successfully:${NC}"
-    echo -e "${GREEN}  Main: $MAIN_ARCHIVE_NAME${NC}"
-    if [ -f "$AGENTS_ARCHIVE_PATH" ]; then
-        echo -e "${GREEN}  Agents: $AGENTS_ARCHIVE_NAME${NC}"
-    fi
-    echo -e "${YELLOW}Transfer both files to your target system for offline installation.${NC}"
+    echo -e "${GREEN}✓ Offline archive created: $ARCHIVE_NAME${NC}"
+    echo -e "${YELLOW}Archive location: $ARCHIVE_PATH${NC}"
+    echo -e "${YELLOW}Transfer this file to your target system and extract it for offline installation.${NC}"
 }
 
 # Generate load script for target system
