@@ -178,19 +178,6 @@
   become: yes
   when: offline_mode | default(false)
 
-- name: Configure Kibana for Fleet offline mode
-  blockinfile:
-    path: "/opt/lme/config/kibana.yml"
-    marker: "# {mark} ANSIBLE MANAGED BLOCK - Fleet Offline Configuration"
-    block: |
-      # Fleet offline/air-gapped configuration
-      xpack.fleet.registryUrl: "https://lme-fleet-distribution:8080"
-      xpack.fleet.isAirGapped: true
-    insertbefore: "^xpack.fleet.packages:"
-    backup: yes
-    create: no
-  become: yes
-  when: offline_mode | default(false)
 
 - name: Get CA fingerprint
   ansible.builtin.shell: |
