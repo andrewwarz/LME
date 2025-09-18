@@ -338,6 +338,17 @@ download_packages() {
             source "$HOME/.nix-profile/etc/profile.d/nix.sh"
         fi
 
+        # Also try sourcing from /etc/profile.d/nix.sh (multi-user install)
+        if [ -f "/etc/profile.d/nix.sh" ]; then
+            source "/etc/profile.d/nix.sh"
+        fi
+
+        # Start Nix daemon if it's not running (for multi-user installs)
+        if [ -f "/etc/systemd/system/nix-daemon.service" ] && command -v systemctl >/dev/null 2>&1; then
+            echo -e "${YELLOW}Starting Nix daemon...${NC}"
+            sudo systemctl start nix-daemon || true
+        fi
+
         # Check again after installation
         if ! command -v nix-build >/dev/null 2>&1; then
             echo -e "${RED}✗ Failed to install Nix${NC}"
@@ -369,17 +380,38 @@ download_packages() {
 
     # Build podman without installing it locally
     echo -e "${YELLOW}Running nix-build '<nixpkgs>' -A podman --no-out-link${NC}"
-    PODMAN_STORE_PATH=$(nix-build '<nixpkgs>' -A podman --no-out-link 2>&1)
-    BUILD_EXIT_CODE=$?
 
-    if [ $BUILD_EXIT_CODE -ne 0 ] || [ -z "$PODMAN_STORE_PATH" ] || [ ! -d "$PODMAN_STORE_PATH" ]; then
+    # Capture both stdout and stderr separately
+    BUILD_OUTPUT=$(mktemp)
+    BUILD_ERROR=$(mktemp)
+
+    if nix-build '<nixpkgs>' -A podman --no-out-link > "$BUILD_OUTPUT" 2> "$BUILD_ERROR"; then
+        PODMAN_STORE_PATH=$(cat "$BUILD_OUTPUT")
+        echo -e "${GREEN}✓ Successfully built podman${NC}"
+    else
         echo -e "${RED}✗ Failed to build podman with nix-build${NC}"
-        echo -e "${RED}Error output: $PODMAN_STORE_PATH${NC}"
+        echo -e "${RED}Build output:${NC}"
+        cat "$BUILD_OUTPUT"
+        echo -e "${RED}Error output:${NC}"
+        cat "$BUILD_ERROR"
+
+        # Clean up temp files
+        rm -f "$BUILD_OUTPUT" "$BUILD_ERROR"
+
         echo -e "${YELLOW}This could be due to:${NC}"
         echo -e "${YELLOW}  - Nix daemon not running properly${NC}"
         echo -e "${YELLOW}  - Permission issues with Nix store${NC}"
         echo -e "${YELLOW}  - Network issues downloading packages${NC}"
-        echo -e "${YELLOW}Please fix Nix installation and re-run the prepare script${NC}"
+        echo -e "${YELLOW}Try running: sudo systemctl start nix-daemon${NC}"
+        exit 1
+    fi
+
+    # Clean up temp files
+    rm -f "$BUILD_OUTPUT" "$BUILD_ERROR"
+
+    # Verify the store path exists
+    if [ -z "$PODMAN_STORE_PATH" ] || [ ! -d "$PODMAN_STORE_PATH" ]; then
+        echo -e "${RED}✗ Invalid podman store path: $PODMAN_STORE_PATH${NC}"
         exit 1
     fi
 
