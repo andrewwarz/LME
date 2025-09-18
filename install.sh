@@ -614,6 +614,18 @@ if [ "$OFFLINE_MODE" = "true" ]; then
             echo -e "${GREEN}✓ Kibana already configured for Fleet offline mode${NC}"
         fi
 
+        # Configure Kibana container to use only local CA in offline mode
+        echo -e "${YELLOW}Configuring Kibana container for offline CA trust...${NC}"
+        KIBANA_CONTAINER_FILE="$SCRIPT_DIR/quadlet/lme-kibana.container"
+
+        if [ -f "$KIBANA_CONTAINER_FILE" ]; then
+            # Replace NODE_EXTRA_CA_CERTS to use only local CA
+            sed -i 's|NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt:/usr/share/kibana/config/certs/ca/ca.crt|NODE_EXTRA_CA_CERTS=/usr/share/kibana/config/certs/ca/ca.crt|g' "$KIBANA_CONTAINER_FILE"
+            echo -e "${GREEN}✓ Kibana container configured to trust only local CA${NC}"
+        else
+            echo -e "${RED}✗ Kibana container file not found${NC}"
+        fi
+
         # Create offline mode marker files
         echo -e "${YELLOW}Creating offline mode marker files...${NC}"
         sudo mkdir -p /opt/lme
