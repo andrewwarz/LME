@@ -598,21 +598,17 @@ if [ "$OFFLINE_MODE" = "true" ]; then
 
         # Configure Kibana for Fleet offline mode
         echo -e "${YELLOW}Configuring Kibana for Fleet offline mode...${NC}"
-        sudo mkdir -p /opt/lme/config
 
-        # Copy the base kibana.yml to /opt/lme/config/
-        sudo cp "$SCRIPT_DIR/config/kibana.yml" "/opt/lme/config/kibana.yml"
-
-        # Add Fleet offline configuration to kibana.yml
-        if ! grep -q "xpack.fleet.registryUrl" "/opt/lme/config/kibana.yml"; then
+        # Add Fleet offline configuration to the source kibana.yml
+        if ! grep -q "xpack.fleet.registryUrl" "$SCRIPT_DIR/config/kibana.yml"; then
             # Insert Fleet offline configuration before xpack.fleet.packages
-            sudo awk '/^xpack\.fleet\.packages:/ {
+            awk '/^xpack\.fleet\.packages:/ {
                 print "# Fleet offline/air-gapped configuration"
                 print "xpack.fleet.registryUrl: \"https://lme-fleet-distribution:8080\""
                 print "xpack.fleet.isAirGapped: true"
                 print ""
-            } 1' "/opt/lme/config/kibana.yml" > /tmp/kibana_temp.yml
-            sudo mv /tmp/kibana_temp.yml "/opt/lme/config/kibana.yml"
+            } 1' "$SCRIPT_DIR/config/kibana.yml" > /tmp/kibana_temp.yml
+            mv /tmp/kibana_temp.yml "$SCRIPT_DIR/config/kibana.yml"
             echo -e "${GREEN}✓ Kibana configured for Fleet offline mode${NC}"
         else
             echo -e "${GREEN}✓ Kibana already configured for Fleet offline mode${NC}"
@@ -620,6 +616,7 @@ if [ "$OFFLINE_MODE" = "true" ]; then
 
         # Create offline mode marker files
         echo -e "${YELLOW}Creating offline mode marker files...${NC}"
+        sudo mkdir -p /opt/lme
         sudo touch /opt/lme/OFFLINE_MODE
         sudo touch /opt/lme/FLEET_SETUP_FINISHED
 
