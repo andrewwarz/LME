@@ -21,7 +21,7 @@ HostName=lme-fleet-distribution
 PodmanArgs=--network-alias lme-fleet-distribution
 PublishPort=8080:8080
 Volume=lme_certs:/certs:ro
-Environment=REGISTRY_HTTP_TLS_CERTIFICATE=/certs/fleet-distribution/fleet-distribution.crt REGISTRY_HTTP_TLS_KEY=/certs/fleet-distribution/fleet-distribution.key
+Environment=EPR_ADDRESS=0.0.0.0:8080 EPR_TLS_CERT=/certs/fleet-distribution/fleet-distribution.crt EPR_TLS_KEY=/certs/fleet-distribution/fleet-distribution.key
 
 
 # Health check to ensure the distribution server is ready
